@@ -22,20 +22,22 @@ enum CaptureError: LocalizedError {
     }
 }
 
-/// Lifecycle runs on the main thread. The IO queue owns the analyzer; a small
+/// Lifecycle runs on a serial worker (Core Audio can wait for authorization).
+/// The IO queue owns the analyzer; a small
 /// locked mailbox carries only scalar results to the UI, never recorded audio.
 @available(macOS 14.2, *)
 final class SystemAudioCapture {
     private var tapID: AudioObjectID = 0
     private var deviceID: AudioObjectID = 0
     private var ioProc: AudioDeviceIOProcID?
+    private let controlQueue = DispatchQueue(label: "app.miho.capture-control", qos: .userInitiated)
+    private var revision: UInt64 = 0
     private let ioQueue = DispatchQueue(label: "app.miho.audio", qos: .userInteractive)
     private let lock = NSLock()
     private var snapshot = CaptureSnapshot()
     private var gain = 1.0
     private var deviceListener: AudioObjectPropertyListenerBlock?
     var onOutputChanged: (() -> Void)?
-    private(set) var isRunning = false
 
     init() {
         var address = Self.address(kAudioHardwarePropertyDefaultOutputDevice)
@@ -57,9 +59,24 @@ final class SystemAudioCapture {
         return snapshot
     }
 
-    func start() throws {
-        precondition(Thread.isMainThread)
-        stop()
+    func start(completion: @escaping (Error?) -> Void) {
+        lock.lock(); revision &+= 1; let request = revision; lock.unlock()
+        controlQueue.async { [weak self] in
+            guard let self else { return }
+            self.lock.lock(); let isCurrent = self.revision == request; self.lock.unlock()
+            guard isCurrent else { return }
+            var failure: Error?
+            do { try self.startOnWorker() } catch { failure = error }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.lock.lock(); let isCurrent = self.revision == request; self.lock.unlock()
+                if isCurrent { completion(failure) }
+            }
+        }
+    }
+
+    private func startOnWorker() throws {
+        stopOnWorker()
         do {
             let description = CATapDescription(monoGlobalTapButExcludeProcesses: [])
             description.name = "Miho System Audio"
@@ -125,15 +142,18 @@ final class SystemAudioCapture {
                 self.lock.unlock()
             }, "连接音频分析回调")
             try check(AudioDeviceStart(deviceID, ioProc), "开始系统音频捕获")
-            isRunning = true
         } catch {
-            stop()
+            stopOnWorker()
             throw error
         }
     }
 
     func stop() {
-        precondition(Thread.isMainThread)
+        lock.lock(); revision &+= 1; snapshot = CaptureSnapshot(); lock.unlock()
+        controlQueue.async { [weak self] in self?.stopOnWorker() }
+    }
+
+    private func stopOnWorker() {
         if let ioProc {
             AudioDeviceStop(deviceID, ioProc)
             AudioDeviceDestroyIOProcID(deviceID, ioProc)
@@ -142,7 +162,7 @@ final class SystemAudioCapture {
         // Destroying the IO proc ends synchronous callbacks before reset.
         if deviceID != 0 { AudioHardwareDestroyAggregateDevice(deviceID) }
         if tapID != 0 { AudioHardwareDestroyProcessTap(tapID) }
-        deviceID = 0; tapID = 0; isRunning = false
+        deviceID = 0; tapID = 0
         lock.lock(); snapshot = CaptureSnapshot(); lock.unlock()
     }
 
