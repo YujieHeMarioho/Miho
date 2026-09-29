@@ -13,6 +13,7 @@ public struct RhythmFrame: Equatable {
 public final class RhythmAnalyzer {
     public let sampleRate: Double
     private let windowSize = 512
+    private let lowPassAlpha: Double
     private var samples = 0
     private var squares = 0.0
     private var bassSquares = 0.0
@@ -27,13 +28,13 @@ public final class RhythmAnalyzer {
     public init(sampleRate: Double = 48_000) {
         precondition(sampleRate.isFinite && sampleRate > 0)
         self.sampleRate = sampleRate
+        self.lowPassAlpha = 1 - exp(-2 * .pi * 180 / sampleRate)
     }
 
     @discardableResult
     public func consume(_ input: Float, sensitivity: Double = 1) -> RhythmFrame {
         let value = input.isFinite ? Double(input) : 0
-        let alpha = 1 - exp(-2 * .pi * 180 / sampleRate)
-        lowPass += alpha * (value - lowPass)
+        lowPass += lowPassAlpha * (value - lowPass)
         squares += value * value
         bassSquares += lowPass * lowPass
         samples += 1

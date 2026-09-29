@@ -16,13 +16,17 @@ final class DragHostingView: NSHostingView<PetView> {
     private var dragOrigin: NSPoint?
     private var windowOrigin: NSPoint?
     override var acceptsFirstResponder: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        bounds.contains(convert(point, from: superview)) ? self : nil
+    }
     override func mouseDown(with event: NSEvent) {
-        dragOrigin = NSEvent.mouseLocation
+        dragOrigin = window?.convertPoint(toScreen: event.locationInWindow)
         windowOrigin = window?.frame.origin
     }
     override func mouseDragged(with event: NSEvent) {
         guard let start = dragOrigin, let origin = windowOrigin else { return }
-        let location = NSEvent.mouseLocation
+        guard let location = window?.convertPoint(toScreen: event.locationInWindow) else { return }
         window?.setFrameOrigin(NSPoint(x: origin.x + location.x - start.x, y: origin.y + location.y - start.y))
     }
     override func mouseUp(with event: NSEvent) {
