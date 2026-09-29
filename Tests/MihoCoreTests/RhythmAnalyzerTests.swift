@@ -57,6 +57,22 @@ final class RhythmAnalyzerTests: XCTestCase {
         XCTAssertEqual(result.beatCount, 0)
     }
 
+    func testOnsetAnalysisRespondsWithinTwentyMilliseconds() {
+        for rate in [44_100.0, 48_000.0, 96_000.0] {
+            let analyzer = RhythmAnalyzer(sampleRate: rate)
+            var firstResponse: Double?
+            for index in 0..<Int(rate * 0.15) {
+                let frame = analyzer.consume(Float(0.3 * sin(2 * .pi * 60 * Double(index) / rate)))
+                if frame.beatCount > 0 && frame.energy > 0.1 {
+                    firstResponse = Double(index + 1) / rate
+                    break
+                }
+            }
+            XCTAssertNotNil(firstResponse)
+            XCTAssertLessThan(firstResponse ?? 1, 0.02)
+        }
+    }
+
     func testCommonDeviceSampleRates() {
         for rate in [44_100.0, 48_000.0, 96_000.0] {
             let analyzer = RhythmAnalyzer(sampleRate: rate)

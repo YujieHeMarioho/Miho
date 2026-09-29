@@ -23,7 +23,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
             model.setEnabled(true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
                 guard let self else { return }
-                print("callbacks=\(self.model.callbackCount) audible=\(self.model.audibleCallbackCount) beats=\(self.model.beats) energy=\(self.model.motion.energy)")
+                print("callbacks=\(self.model.callbackCount) audible=\(self.model.audibleCallbackCount) beats=\(self.model.beats) energy=\(self.model.motion.energy) captureToMotionWorstMs=\(self.model.worstCaptureToMotionMs)")
                 NSApp.terminate(nil)
             }
         } else if !UserDefaults.standard.bool(forKey: "hasSeenWelcome") {
@@ -153,7 +153,7 @@ private struct InfoView: View {
                 .font(.system(size: 13))
             Divider()
             Text(model.status).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
-            Text("音频回调：\(model.callbackCount)  ·  有声音：\(model.audibleCallbackCount)\n检测到的鼓点：\(model.beats)")
+            Text("音频回调：\(model.callbackCount)  ·  有声音：\(model.audibleCallbackCount)\n检测到的鼓点：\(model.beats)\n捕获帧到动作状态（最大）：\(Int(model.worstCaptureToMotionMs)) ms")
                 .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
             Text("声音只在本机内存中实时处理，不保存、不上传。\n如果正在播放却没反应，请检查音频捕获权限并重试。")
                 .font(.system(size: 11)).foregroundStyle(.secondary)

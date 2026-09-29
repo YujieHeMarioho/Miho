@@ -5,6 +5,7 @@ import MihoCore
 struct CaptureSnapshot {
     var rhythm = RhythmFrame()
     var lastCallback: TimeInterval = 0
+    var inputHostTime: UInt64 = 0
     var callbackCount: UInt64 = 0
     var audibleCallbackCount: UInt64 = 0
 }
@@ -119,7 +120,7 @@ final class SystemAudioCapture: AudioCapturing {
             try check(AudioHardwareCreateAggregateDevice(aggregate as CFDictionary, &deviceID), "创建音频分析设备")
             let analyzer = RhythmAnalyzer(sampleRate: format.mSampleRate)
             try check(AudioDeviceCreateIOProcIDWithBlock(&ioProc, deviceID, ioQueue) {
-                [weak self] _, input, _, _, _ in
+                [weak self] _, input, inputTime, _, _ in
                 guard let self else { return }
                 let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
                 guard let buffer = buffers.first, let data = buffer.mData else { return }
@@ -137,6 +138,8 @@ final class SystemAudioCapture: AudioCapturing {
                 self.lock.lock()
                 self.snapshot.rhythm = frame
                 self.snapshot.lastCallback = ProcessInfo.processInfo.systemUptime
+                self.snapshot.inputHostTime = inputTime.pointee.mFlags.contains(.hostTimeValid)
+                    ? inputTime.pointee.mHostTime : 0
                 self.snapshot.callbackCount &+= 1
                 if audible { self.snapshot.audibleCallbackCount &+= 1 }
                 self.lock.unlock()
