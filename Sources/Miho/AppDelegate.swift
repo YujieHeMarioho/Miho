@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @available(macOS 14.2, *)
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var model: CompanionModel!
     private var companion: DesktopCompanion!
     private var statusItem: NSStatusItem!
@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var isVisible = true
     private var infoWindow: NSWindow?
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         model = CompanionModel()
         companion = DesktopCompanion(model: model)
@@ -85,10 +85,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
-    func menuWillOpen(_ menu: NSMenu) {
+    public func menuWillOpen(_ menu: NSMenu) {
         statusMenuItem.title = model.status
         pauseItem.title = model.enabled ? "暂停律动" : "开始律动"
         visibilityItem.title = isVisible ? "隐藏 Miho" : "显示 Miho"
+    }
+
+    public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        isVisible = true
+        companion?.setVisible(true)
+        return true
     }
 
     @objc private func togglePause() { model.setEnabled(!model.enabled) }
@@ -114,7 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         infoWindow?.makeKeyAndOrderFront(nil)
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
+    public func applicationWillTerminate(_ notification: Notification) {
         model?.shutdown()
         companion?.dispose()
     }

@@ -7,7 +7,9 @@ let package = Package(
     products: [.executable(name: "Miho", targets: ["Miho"])],
     targets: [
         .target(name: "MihoCore"),
-        .executableTarget(name: "Miho", dependencies: ["MihoCore"]),
-        .testTarget(name: "MihoCoreTests", dependencies: ["MihoCore"])
+        .target(name: "MihoDesktop", dependencies: ["MihoCore"], path: "Sources/Miho"),
+        .executableTarget(name: "Miho", dependencies: ["MihoDesktop"], path: "Sources/MihoLauncher"),
+        .testTarget(name: "MihoCoreTests", dependencies: ["MihoCore"]),
+        .testTarget(name: "MihoDesktopTests", dependencies: ["MihoDesktop"])
     ]
 )

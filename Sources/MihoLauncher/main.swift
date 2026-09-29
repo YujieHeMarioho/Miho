@@ -1,4 +1,5 @@
 import AppKit
+import MihoDesktop
 
 if #available(macOS 14.2, *) {
     let app = NSApplication.shared

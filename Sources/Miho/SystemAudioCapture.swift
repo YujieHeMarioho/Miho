@@ -9,6 +9,16 @@ struct CaptureSnapshot {
     var audibleCallbackCount: UInt64 = 0
 }
 
+@available(macOS 14.2, *)
+protocol AudioCapturing: AnyObject {
+    var onOutputChanged: (() -> Void)? { get set }
+    func setSensitivity(_ value: Double)
+    func latest() -> CaptureSnapshot
+    func start(completion: @escaping (Error?) -> Void)
+    func stop()
+    func dispose()
+}
+
 enum CaptureError: LocalizedError {
     case coreAudio(String, OSStatus)
     case unsupportedFormat
@@ -26,7 +36,7 @@ enum CaptureError: LocalizedError {
 /// The IO queue owns the analyzer; a small
 /// locked mailbox carries only scalar results to the UI, never recorded audio.
 @available(macOS 14.2, *)
-final class SystemAudioCapture {
+final class SystemAudioCapture: AudioCapturing {
     private var tapID: AudioObjectID = 0
     private var deviceID: AudioObjectID = 0
     private var ioProc: AudioDeviceIOProcID?

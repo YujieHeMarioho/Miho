@@ -15,16 +15,17 @@ final class CompanionModel: ObservableObject {
     @Published var motion = PetMotion()
     @Published var status = "准备好陪你听音乐"
     @Published var enabled = false
-    @Published var sensitivity: Double = UserDefaults.standard.object(forKey: "sensitivity") as? Double ?? 1 {
+    @Published var sensitivity: Double = 1 {
         didSet {
             capture.setSensitivity(sensitivity)
-            UserDefaults.standard.set(sensitivity, forKey: "sensitivity")
+            defaults.set(sensitivity, forKey: "sensitivity")
         }
     }
     @Published var callbackCount: UInt64 = 0
     @Published var audibleCallbackCount: UInt64 = 0
     @Published var beats: UInt64 = 0
-    private let capture = SystemAudioCapture()
+    private let capture: AudioCapturing
+    private let defaults: UserDefaults
     private var timer: Timer?
     private var observers: [NSObjectProtocol] = []
     private var restartWork: DispatchWorkItem?
@@ -35,7 +36,11 @@ final class CompanionModel: ObservableObject {
     private var sleeping = false
     private var errorMessage: String?
 
-    init() {
+    init(capture: AudioCapturing = SystemAudioCapture(), defaults: UserDefaults = .standard) {
+        self.capture = capture
+        self.defaults = defaults
+        let stored = defaults.object(forKey: "sensitivity") as? Double ?? 1
+        sensitivity = stored.isFinite ? min(2, max(0.5, stored)) : 1
         capture.setSensitivity(sensitivity)
         capture.onOutputChanged = { [weak self] in self?.scheduleRestart() }
         let notifications = NSWorkspace.shared.notificationCenter
@@ -57,7 +62,7 @@ final class CompanionModel: ObservableObject {
 
     func setEnabled(_ value: Bool) {
         enabled = value
-        UserDefaults.standard.set(value, forKey: "captureEnabled")
+        defaults.set(value, forKey: "captureEnabled")
         restartWork?.cancel()
         errorMessage = nil
         if value { start() } else { capture.stop(); status = "已暂停 · Miho 正在休息" }
@@ -138,6 +143,7 @@ final class CompanionModel: ObservableObject {
         restartWork?.cancel()
         timer?.invalidate()
         for observer in observers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
+        capture.onOutputChanged = nil
         capture.dispose()
     }
 }
