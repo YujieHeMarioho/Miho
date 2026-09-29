@@ -3,6 +3,18 @@ import MihoDesktop
 
 if #available(macOS 14.2, *) {
     let app = NSApplication.shared
+    if let index = CommandLine.arguments.firstIndex(of: "--export-artifacts"),
+       CommandLine.arguments.indices.contains(index + 1) {
+        do {
+            try MainActor.assumeIsolated {
+                try ArtworkExport.write(to: URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true))
+            }
+            exit(0)
+        } catch {
+            fputs("Miho artwork: \(error.localizedDescription)\n", stderr)
+            exit(1)
+        }
+    }
     let delegate = AppDelegate()
     app.delegate = delegate
     app.run()

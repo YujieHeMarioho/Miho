@@ -131,7 +131,7 @@ final class CompanionModel: ObservableObject {
             else if !enabled { status = "已暂停 · Miho 正在休息" }
             else if let errorMessage { status = errorMessage }
             else if current.callbackCount == 0 && now - startedAt > 3 {
-                status = "未收到音频 · 请检查捕获权限并重试"
+                status = "等待系统声音 · 若已播放，请检查音频权限"
             } else if now - current.lastCallback > 3 && now - startedAt > 3 {
                 status = "音频连接中断 · 可重试连接"
             } else if energy > 0.01 { status = "听到啦！正在跟随声音跳舞 ♪" }

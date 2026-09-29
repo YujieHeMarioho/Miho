@@ -104,22 +104,12 @@ final class SystemAudioCapture: AudioCapturing {
                   format.mBitsPerChannel == 32, format.mChannelsPerFrame == 1,
                   format.mSampleRate > 0 else { throw CaptureError.unsupportedFormat }
 
-            var output: AudioObjectID = 0
-            var outputSize = UInt32(MemoryLayout<AudioObjectID>.size)
-            var outputAddress = Self.address(kAudioHardwarePropertyDefaultOutputDevice)
-            try check(AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &outputAddress,
-                                                0, nil, &outputSize, &output), "读取输出设备")
-            var uidReference: Unmanaged<CFString>?
-            var uidSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-            var uidAddress = Self.address(kAudioDevicePropertyDeviceUID)
-            try check(AudioObjectGetPropertyData(output, &uidAddress, 0, nil, &uidSize, &uidReference), "读取输出设备标识")
-            guard let uid = uidReference?.takeRetainedValue() else { throw CaptureError.unsupportedFormat }
             let aggregate: [String: Any] = [
                 kAudioAggregateDeviceNameKey: "Miho Audio Tap",
                 kAudioAggregateDeviceUIDKey: "app.miho.aggregate.\(UUID().uuidString)",
                 kAudioAggregateDeviceIsPrivateKey: true,
-                kAudioAggregateDeviceMainSubDeviceKey: uid,
-                kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: uid]],
+                // Tap-only: never add a hardware input stream (e.g. a headset mic).
+                kAudioAggregateDeviceSubDeviceListKey: [],
                 kAudioAggregateDeviceTapAutoStartKey: true,
                 kAudioAggregateDeviceTapListKey: [[
                     kAudioSubTapUIDKey: description.uuid.uuidString,
@@ -160,7 +150,7 @@ final class SystemAudioCapture: AudioCapturing {
 
     func stop() {
         lock.lock(); revision &+= 1; snapshot = CaptureSnapshot(); lock.unlock()
-        controlQueue.async { [weak self] in self?.stopOnWorker() }
+        controlQueue.async { self.stopOnWorker() }
     }
 
     private func stopOnWorker() {
