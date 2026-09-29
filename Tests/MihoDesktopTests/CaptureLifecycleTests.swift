@@ -20,9 +20,22 @@ private final class FakeCapture: AudioCapturing {
 @available(macOS 14.2, *)
 @MainActor
 final class CaptureLifecycleTests: XCTestCase {
+    private var preferenceSuites: [String] = []
+
+    private func makeDefaults() -> UserDefaults {
+        let name = "Miho.tests.\(UUID().uuidString)"
+        preferenceSuites.append(name)
+        return UserDefaults(suiteName: name)!
+    }
+
+    override func tearDown() {
+        for name in preferenceSuites { UserDefaults.standard.removePersistentDomain(forName: name) }
+        preferenceSuites.removeAll()
+        super.tearDown()
+    }
+
     private func makeModel(_ capture: FakeCapture) -> CompanionModel {
-        let defaults = UserDefaults(suiteName: "Miho.tests.\(UUID().uuidString)")!
-        return CompanionModel(capture: capture, defaults: defaults)
+        CompanionModel(capture: capture, defaults: makeDefaults())
     }
 
     func testPermissionFailureLeavesUsableModelAndCanRetry() {
@@ -76,9 +89,37 @@ final class CaptureLifecycleTests: XCTestCase {
         XCTAssertNil(capture.onOutputChanged)
     }
 
+    func testWakeDoesNotResumeWhenPaused() async {
+        let capture = FakeCapture()
+        let model = makeModel(capture)
+        model.setEnabled(true)
+        model.setEnabled(false)
+        NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.willSleepNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
+        let settled = expectation(description: "paused wake settled")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { settled.fulfill() }
+        await fulfillment(of: [settled], timeout: 2)
+        XCTAssertEqual(capture.starts, 1)
+        XCTAssertFalse(model.enabled)
+        model.shutdown()
+    }
+
+    func testShutdownCancelsPendingReconnect() async {
+        let capture = FakeCapture()
+        let model = makeModel(capture)
+        model.setEnabled(true)
+        capture.onOutputChanged?()
+        model.shutdown()
+        let settled = expectation(description: "shutdown settled")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { settled.fulfill() }
+        await fulfillment(of: [settled], timeout: 2)
+        XCTAssertEqual(capture.starts, 1)
+        XCTAssertTrue(capture.disposed)
+    }
+
     func testSensitivityIsRestoredAndApplied() {
         let capture = FakeCapture()
-        let defaults = UserDefaults(suiteName: "Miho.tests.\(UUID().uuidString)")!
+        let defaults = makeDefaults()
         defaults.set(1.7, forKey: "sensitivity")
         let model = CompanionModel(capture: capture, defaults: defaults)
         XCTAssertEqual(capture.gain, 1.7)
