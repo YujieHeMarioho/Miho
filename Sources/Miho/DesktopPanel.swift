@@ -44,7 +44,7 @@ final class DesktopCompanion {
     }
 
     init(model: CompanionModel) {
-        panel = DesktopPanel(contentRect: NSRect(x: 0, y: 0, width: 200, height: 210),
+        panel = DesktopPanel(contentRect: NSRect(x: 0, y: 0, width: 260, height: 300),
                              styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.title = "Miho 迷糊"
         panel.isOpaque = false
@@ -61,7 +61,7 @@ final class DesktopCompanion {
         if defaults.object(forKey: "petX") != nil {
             panel.setFrameOrigin(NSPoint(x: defaults.double(forKey: "petX"), y: defaults.double(forKey: "petY")))
         } else if let screen = NSScreen.main {
-            panel.setFrameOrigin(NSPoint(x: screen.visibleFrame.maxX - 224, y: screen.visibleFrame.minY + 12))
+            panel.setFrameOrigin(NSPoint(x: screen.visibleFrame.maxX - 284, y: screen.visibleFrame.minY + 12))
         }
         clampAndSave()
         screenObserver = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,

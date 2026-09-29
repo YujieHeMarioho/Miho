@@ -3,6 +3,10 @@ import Foundation
 public struct RhythmFrame: Equatable {
     public var energy: Double = 0
     public var bass: Double = 0
+    /// Relative low-frequency power and normalized spectral brightness proxies.
+    /// These describe sound texture, not the semantic emotion of a song.
+    public var bassShare: Double = 0
+    public var brightness: Double = 0
     public var beatCount: UInt64 = 0
     public var isActive: Bool = false
     public init() {}
@@ -17,6 +21,8 @@ public final class RhythmAnalyzer {
     private var samples = 0
     private var squares = 0.0
     private var bassSquares = 0.0
+    private var differenceSquares = 0.0
+    private var previousSample = 0.0
     private var lowPass = 0.0
     private var baseline = 0.0
     private var previousStrength = 0.0
@@ -37,6 +43,9 @@ public final class RhythmAnalyzer {
         lowPass += lowPassAlpha * (value - lowPass)
         squares += value * value
         bassSquares += lowPass * lowPass
+        let difference = value - previousSample
+        differenceSquares += difference * difference
+        previousSample = value
         samples += 1
         guard samples == windowSize else { return result }
         let dt = Double(windowSize) / sampleRate
@@ -61,10 +70,16 @@ public final class RhythmAnalyzer {
         previousStrength = strength
         result.energy = level
         result.bass = min(1, bassRMS * 7 * gain)
+        let textureSmoothing = 1 - exp(-dt / 0.25)
+        let bassTarget = active ? min(1, bassSquares / max(squares, 1e-12)) : 0
+        let brightTarget = active ? min(1, sqrt(differenceSquares / max(squares, 1e-12)) * sampleRate / (2 * .pi * 4_000)) : 0
+        result.bassShare += (bassTarget - result.bassShare) * textureSmoothing
+        result.brightness += (brightTarget - result.brightness) * textureSmoothing
         result.isActive = active || level > 0.01
         samples = 0
         squares = 0
         bassSquares = 0
+        differenceSquares = 0
         return result
     }
 }

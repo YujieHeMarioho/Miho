@@ -9,6 +9,7 @@ struct PetMotion {
     var energy = 0.0
     var bounce = 0.0
     var paused = false
+    var pose = DancePose()
 }
 
 @available(macOS 14.2, *)
@@ -16,6 +17,8 @@ final class CompanionModel: ObservableObject {
     @Published var motion = PetMotion()
     @Published var status = "准备好陪你听音乐"
     @Published var enabled = false
+    @Published var mood: DanceMood = .dreamy
+    @Published var danceMove: DanceMove = .twoStep
     @Published var sensitivity: Double = 1 {
         didSet {
             capture.setSensitivity(sensitivity)
@@ -38,6 +41,7 @@ final class CompanionModel: ObservableObject {
     private var startedAt = 0.0
     private var sleeping = false
     private var errorMessage: String?
+    private let choreographer = Choreographer()
 
     init(capture: AudioCapturing = SystemAudioCapture(), defaults: UserDefaults = .standard) {
         self.capture = capture
@@ -126,6 +130,9 @@ final class CompanionModel: ObservableObject {
         let age = now - lastBeatTime
         next.bounce = age >= 0 && age < 0.36 && enabled ? sin(.pi * age / 0.36) : 0
         next.paused = !enabled
+        var rhythm = current.rhythm
+        rhythm.energy = energy
+        next.pose = choreographer.update(dt: dt, rhythm: rhythm, enabled: enabled && !sleeping)
         motion = next
         if enabled && energy > 0.01 && current.inputHostTime != 0 {
             let hostNow = AudioGetCurrentHostTime()
@@ -140,6 +147,8 @@ final class CompanionModel: ObservableObject {
             audibleCallbackCount = current.audibleCallbackCount
             beats = current.rhythm.beatCount
             worstCaptureToMotionMs = measuredWorstMs
+            mood = choreographer.mood
+            danceMove = choreographer.move
             if sleeping { status = "休眠中" }
             else if !enabled { status = "已暂停 · Miho 正在休息" }
             else if let errorMessage { status = errorMessage }
@@ -147,7 +156,7 @@ final class CompanionModel: ObservableObject {
                 status = "等待系统声音 · 若已播放，请检查音频权限"
             } else if now - current.lastCallback > 3 && now - startedAt > 3 {
                 status = "音频连接中断 · 可重试连接"
-            } else if energy > 0.01 { status = "听到啦！正在跟随声音跳舞 ♪" }
+            } else if energy > 0.01 { status = "\(mood.label) · \(danceMove.label) ♪" }
             else { status = "等待声音 · 放首歌给 Miho 吧" }
         }
     }

@@ -11,6 +11,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
     private var visibilityItem: NSMenuItem!
     private var isVisible = true
     private var infoWindow: NSWindow?
+    private var studioWindow: NSWindow?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -19,6 +20,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         buildMenu()
         companion.contextMenu = statusItem.menu
         if CommandLine.arguments.contains("--diagnostics") { showInfo() }
+        if CommandLine.arguments.contains("--dance-studio") { showStudio() }
         if CommandLine.arguments.contains("--probe") {
             model.setEnabled(true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
@@ -65,6 +67,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         menu.addItem(pauseItem)
         visibilityItem = item("隐藏 Miho", #selector(toggleVisible))
         menu.addItem(visibilityItem)
+        menu.addItem(item("舞步预览…", #selector(showStudio)))
         menu.addItem(.separator())
         let sliderItem = NSMenuItem()
         sliderItem.view = NSHostingView(rootView: SensitivityView(model: model))
@@ -101,6 +104,19 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
     @objc private func toggleVisible() { isVisible.toggle(); companion.setVisible(isVisible) }
     @objc private func retry() { model.retry() }
     @objc private func quit() { NSApp.terminate(nil) }
+    @objc private func showStudio() {
+        if studioWindow == nil {
+            let window = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 650,height: 540),
+                                  styleMask: [.titled,.closable,.miniaturizable],backing: .buffered,defer: false)
+            window.title = "Miho · 舞步预览"
+            window.contentView = NSHostingView(rootView: DanceStudioView())
+            window.isReleasedWhenClosed = false
+            window.center()
+            studioWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        studioWindow?.makeKeyAndOrderFront(nil)
+    }
     @objc private func openPermissions() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
             NSWorkspace.shared.open(url)
@@ -149,7 +165,7 @@ private struct InfoView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Miho 迷糊 🌱").font(.system(size: 27, weight: .semibold, design: .rounded))
             Text("Tencent Music Hackathon · 腾讯音乐黑客松").font(.system(size: 12)).foregroundStyle(.secondary)
-            Text("一个陪你听音乐、跟着声音跳舞的小团子。\n拖动它换位置，从菜单栏调整律动。")
+            Text("一个陪你听音乐的 3D 小舞者。\n拖动它换位置，右键查看舞步和调整律动。")
                 .font(.system(size: 13))
             Divider()
             Text(model.status).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
