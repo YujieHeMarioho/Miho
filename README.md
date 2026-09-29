@@ -1,2 +1,74 @@
-# Miho
-A cute macOS desktop companion that listens to your music and dances to the beat. Built for the Tencent Music hackathon.
+# Miho 迷糊 🌱
+
+一个会随电脑声音跳舞的 macOS 桌面小团子。为 **Tencent Music Hackathon（腾讯音乐黑客松）**制作。
+
+<p>
+  <img src="docs/images/miho-idle.png" width="200" alt="Miho 静静陪伴你" />
+  <img src="docs/images/miho-dancing.png" width="200" alt="Miho 跟着声音跳舞" />
+</p>
+
+音乐软件、浏览器视频、本地播放，以及多个应用混合播放的系统声音，都通过同一条系统输出捕获链路驱动 Miho。奶白色身体、小手脚、粉色腮红和头顶的小芽均由原生矢量绘制。
+
+## 使用
+
+需要 **macOS 14.2 或更新版本**。当前构建脚本生成本机架构的应用，已在 Apple Silicon Mac 上验证。
+
+```bash
+./scripts/build-app.sh
+open dist/Miho.app
+```
+
+构建需要 Xcode 与 Swift 5.10 或更新版本。脚本会优先使用 `/Applications/Xcode.app`，不改变全局 `xcode-select`；其他安装位置可以通过 `DEVELOPER_DIR` 指定。预先生成的本机应用位于 `dist/Miho.app`，不提交二进制到 Git。
+
+1. 首次启动点击「开始听音乐」，允许系统音频捕获。
+2. 播放音乐或视频，Miho 就会摇摆、弹跳、张嘴，并出现小音符。
+3. 没有声音时，Miho 会平滑回到呼吸、眨眼的待机状态。
+4. **拖动**小团子换位置；下次启动会记住位置。
+5. 点击菜单栏的笑脸，或**右键**小团子，调整灵敏度、暂停律动、隐藏／显示或退出。
+6. 隐藏后可从菜单栏显示；再次打开应用也会让 Miho 回到桌面。
+
+Miho 的人物与手脚约 140 点宽，透明窗口为 200 × 210 点，留出跳舞空间。它不占 Dock，不抢键盘焦点，显示在普通窗口上方并跟随桌面空间。
+
+## 音频权限与隐私
+
+Miho 使用 Apple **Core Audio Process Tap** 分析系统输出，只接收声音 Tap，不加入硬件麦克风输入。应用不请求麦克风权限，不录制屏幕，不保存或上传音频，也不连接服务器。
+
+权限入口：系统设置 → 隐私与安全性 → **屏幕与系统音频录制** → **仅系统音频录制** → Miho。不同 macOS 版本的名称可能稍有区别。
+
+- 没有声音时，Core Audio 可以等待第一个播放源，精灵仍正常待机。
+- 正在播放却没反应：检查权限，从 Miho 菜单选择「重试音频连接」。
+- 设备切换和唤醒会触发延迟合并后的重连；暂停期间不会自动重新捕获。
+- 本地临时签名随重新构建可能需要重新授权。面向其他电脑的 Developer ID 签名与公证尚未加入。
+
+## 开发与测试
+
+```bash
+./scripts/test.sh
+./scripts/build-app.sh
+```
+
+开发调试可使用 `CONFIGURATION=debug ./scripts/build-app.sh`。先退出正在运行的 Miho，再启动新构建。
+
+应用菜单中的「关于 Miho 与连接状态」显示实时连接状态、音频回调、鼓点与捕获帧到动作状态的时间。也可在关闭其他 Miho 实例后运行十秒诊断：
+
+```bash
+./dist/Miho.app/Contents/MacOS/Miho --probe
+```
+
+诊断期间需要允许音频捕获并播放声音；只输出标量统计，不输出音频。`--diagnostics` 会直接打开连接状态窗口。`--export-artifacts <目录>` 从同一矢量角色导出预览和图标，不启动音频捕获。
+
+### 结构
+
+- `MihoCore`：512 样本窗口的音量、低频能量、瞬态检测；自适应阈值、冷却时间和能量平滑。
+- `MihoDesktop`：私有音频 Tap、后台生命周期、30 Hz 动作状态、透明桌面面板和菜单栏。
+- `Miho`：应用入口；`scripts/build-app.sh` 打包图标、权限说明和本地签名。
+
+数据流：**系统输出 → 音频 Tap → 律动分析 → 动作状态 → SwiftUI 精灵**。分析只保留窗口累计值；音频线程与 UI 之间只传递标量快照。
+
+## 第一版边界
+
+Miho 跟随声音的音量和瞬态律动，尚不识别歌名、曲风或精确 BPM。人声、通知声也会驱动动作。系统静音不一定让应用输出流变成零；要让 Miho 休息，可以暂停播放或从 Miho 菜单暂停。
+
+受内容保护或系统限制的音频不保证可以捕获。不同耳机和音频路由的兼容性仍需扩展设备验证。目标为低于 150 ms 的声音响应；内置诊断测量的是捕获帧到动作状态，不能代表所有设备上扬声器到屏幕的完整感知延迟。
+
+当前验证记录见 [docs/VALIDATION.md](docs/VALIDATION.md)。开发过程按里程碑提交到 Git，便于逐步回滚。

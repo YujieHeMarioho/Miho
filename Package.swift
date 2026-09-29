@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "Miho",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS("14.2")],
     products: [.executable(name: "Miho", targets: ["Miho"])],
     targets: [
         .target(name: "MihoCore"),
