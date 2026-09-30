@@ -3,6 +3,7 @@ import MihoCore
 
 /// A local, interactive animation review surface. It never substitutes fake audio for live capture.
 struct DanceStudioView: View {
+    @ObservedObject var model: CompanionModel
     @State private var selected: DanceMove = .twoStep
     @State private var mood: DanceMood = .groovy
     @State private var autoPlay = true
@@ -26,7 +27,7 @@ struct DanceStudioView: View {
                     let pose = Choreographer.dance(move: previous,phase: phase,energy: energy)
                         .mixed(with: Choreographer.dance(move: move,phase: phase,energy: energy),by: blend*blend*(3-2*blend))
                     VStack(spacing: 0) {
-                        CharacterView(pose: pose).frame(width: 320,height: 350)
+                        CharacterView(pose: pose,appearance: model.appearance).frame(width: 320,height: 350)
                         Text(move.label).font(.system(size: 13,weight: .semibold)).foregroundStyle(accent)
                     }
                 }

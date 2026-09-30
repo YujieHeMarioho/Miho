@@ -13,17 +13,34 @@ struct PetMotion {
 }
 
 final class CharacterAnimation: ObservableObject {
-    @Published var pose = DancePose()
+    struct Frame {
+        var pose = DancePose()
+        var rotation = Rotation3()
+        var appearance = CharacterAppearance()
+    }
+    @Published var frame = Frame()
 }
 
 @available(macOS 14.2, *)
 final class CompanionModel: ObservableObject {
     let animation = CharacterAnimation()
     var motion = PetMotion() {
-        didSet { animation.pose = motion.pose }
+        didSet { publishFrame() }
     }
     @Published var status = "准备好陪你听音乐"
     @Published var enabled = false
+    @Published var appearance = CharacterAppearance() {
+        didSet {
+            if let data = try? JSONEncoder().encode(appearance) { defaults.set(data,forKey: "characterAppearance") }
+            publishFrame()
+        }
+    }
+    @Published var autoReturnRotation = false {
+        didSet {
+            dragRotation.automaticallyReturns = autoReturnRotation
+            defaults.set(autoReturnRotation,forKey: "rotationAutoReturn")
+        }
+    }
     @Published var mood: DanceMood = .dreamy
     @Published var danceMove: DanceMove = .twoStep
     @Published var sensitivity: Double = 1 {
@@ -49,10 +66,15 @@ final class CompanionModel: ObservableObject {
     private var sleeping = false
     private var errorMessage: String?
     private let choreographer = Choreographer()
+    private let dragRotation = DragRotation()
 
     init(capture: AudioCapturing = SystemAudioCapture(), defaults: UserDefaults = .standard) {
         self.capture = capture
         self.defaults = defaults
+        appearance = CharacterAppearance.load(defaults.data(forKey: "characterAppearance"))
+        publishFrame()
+        autoReturnRotation = defaults.object(forKey: "rotationAutoReturn") as? Bool ?? false
+        dragRotation.automaticallyReturns = autoReturnRotation
         let stored = defaults.object(forKey: "sensitivity") as? Double ?? 1
         sensitivity = stored.isFinite ? min(2, max(0.5, stored)) : 1
         capture.setSensitivity(sensitivity)
@@ -84,6 +106,20 @@ final class CompanionModel: ObservableObject {
 
     func retry() {
         if enabled { start() } else { setEnabled(true) }
+    }
+
+    func beginRotation() { dragRotation.begin() }
+    func rotate(dx: Double, dy: Double, dt: Double) {
+        dragRotation.drag(dx: dx,dy: dy,dt: dt)
+        publishFrame()
+    }
+    func endRotation() { dragRotation.end() }
+    func resetRotation() {
+        dragRotation.reset()
+        publishFrame()
+    }
+    private func publishFrame() {
+        animation.frame = .init(pose: motion.pose,rotation: dragRotation.rotation,appearance: appearance)
     }
 
     private func start() {
@@ -122,6 +158,7 @@ final class CompanionModel: ObservableObject {
         let dt = min(0.1, max(0, now - lastTime))
         lastTime = now
         let current = capture.latest()
+        dragRotation.update(dt: dt)
         var energy = current.rhythm.energy
         if !enabled || sleeping || now - current.lastCallback > 0.25 {
             energy = motion.energy * exp(-dt / 0.16)

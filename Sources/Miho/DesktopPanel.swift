@@ -9,29 +9,58 @@ final class DesktopPanel: NSPanel {
 @available(macOS 14.2, *)
 final class DragHostingView: NSHostingView<PetView> {
     var onDragEnded: (() -> Void)?
+    var onRotationBegan: (() -> Void)?
+    var onRotationChanged: ((Double,Double,Double) -> Void)?
+    var onRotationEnded: (() -> Void)?
+    var onResetRotation: (() -> Void)?
     var companionMenu: NSMenu?
     override func rightMouseDown(with event: NSEvent) {
+        finishGesture()
         if let companionMenu { NSMenu.popUpContextMenu(companionMenu, with: event, for: self) }
     }
     private var dragOrigin: NSPoint?
     private var windowOrigin: NSPoint?
+    private var rotating = false
+    private var lastRotationPoint = NSPoint.zero
+    private var lastRotationTime = 0.0
     override var acceptsFirstResponder: Bool { false }
+    override var mouseDownCanMoveWindow: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? {
         bounds.contains(convert(point, from: superview)) ? self : nil
     }
     override func mouseDown(with event: NSEvent) {
-        dragOrigin = window?.convertPoint(toScreen: event.locationInWindow)
-        windowOrigin = window?.frame.origin
+        finishGesture()
+        if event.clickCount == 2 {
+            onResetRotation?()
+        } else if event.modifierFlags.contains(.option) {
+            dragOrigin = window?.convertPoint(toScreen: event.locationInWindow)
+            windowOrigin = window?.frame.origin
+        } else {
+            rotating = true
+            lastRotationPoint = event.locationInWindow
+            lastRotationTime = event.timestamp
+            onRotationBegan?()
+        }
     }
     override func mouseDragged(with event: NSEvent) {
+        if rotating {
+            let point = event.locationInWindow
+            onRotationChanged?(Double(point.x-lastRotationPoint.x),Double(point.y-lastRotationPoint.y),event.timestamp-lastRotationTime)
+            lastRotationPoint = point; lastRotationTime = event.timestamp
+            return
+        }
         guard let start = dragOrigin, let origin = windowOrigin else { return }
         guard let location = window?.convertPoint(toScreen: event.locationInWindow) else { return }
         window?.setFrameOrigin(NSPoint(x: origin.x + location.x - start.x, y: origin.y + location.y - start.y))
     }
     override func mouseUp(with event: NSEvent) {
-        dragOrigin = nil; windowOrigin = nil
-        onDragEnded?()
+        finishGesture()
+    }
+    private func finishGesture() {
+        if rotating { onRotationEnded?() }
+        if dragOrigin != nil { onDragEnded?() }
+        rotating = false; dragOrigin = nil; windowOrigin = nil
     }
 }
 
@@ -50,12 +79,20 @@ final class DesktopCompanion {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
+        // AppKit must leave mouse drags to the rotation handler. Window placement
+        // uses our explicit Option-drag path, which still calls setFrameOrigin.
+        panel.isMovable = false
+        panel.isMovableByWindowBackground = false
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
         let content = DragHostingView(rootView: PetView(model: model))
         content.onDragEnded = { [weak self] in self?.clampAndSave() }
+        content.onRotationBegan = { [weak model] in model?.beginRotation() }
+        content.onRotationChanged = { [weak model] dx,dy,dt in model?.rotate(dx: dx,dy: dy,dt: dt) }
+        content.onRotationEnded = { [weak model] in model?.endRotation() }
+        content.onResetRotation = { [weak model] in model?.resetRotation() }
         panel.contentView = content
         let defaults = UserDefaults.standard
         if defaults.object(forKey: "petX") != nil {

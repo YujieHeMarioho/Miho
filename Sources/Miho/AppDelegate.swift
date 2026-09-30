@@ -9,9 +9,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
     private var statusMenuItem: NSMenuItem!
     private var pauseItem: NSMenuItem!
     private var visibilityItem: NSMenuItem!
+    private var autoReturnItem: NSMenuItem!
     private var isVisible = true
     private var infoWindow: NSWindow?
     private var studioWindow: NSWindow?
+    private var editorWindow: NSWindow?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -21,6 +23,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         companion.contextMenu = statusItem.menu
         if CommandLine.arguments.contains("--diagnostics") { showInfo() }
         if CommandLine.arguments.contains("--dance-studio") { showStudio() }
+        if CommandLine.arguments.contains("--character-editor") { showEditor() }
         if CommandLine.arguments.contains("--probe") {
             model.setEnabled(true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
@@ -39,7 +42,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "你好，我是 Miho 迷糊 🎧"
-        alert.informativeText = "放首歌，我就会跟着跳舞。\n\nMiho 会申请捕获电脑播放的声音，只在本机实时分析，不保存、不上传，也不使用麦克风。你可以随时从菜单栏暂停。\n\n拖动小团子可以换位置。"
+        alert.informativeText = "放首歌，我就会跟着跳舞。\n\nMiho 会申请捕获电脑播放的声音，只在本机实时分析，不保存、不上传，也不使用麦克风。你可以随时从菜单栏暂停。\n\n拖动旋转，按住 ⌥ 拖动换位置，双击回正。右键选择「自定义角色」来创造你的伙伴。"
         alert.addButton(withTitle: "开始听音乐")
         alert.addButton(withTitle: "先陪我待着")
         let response = alert.runModal()
@@ -59,6 +62,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         let title = NSMenuItem(title: "Miho 迷糊 🎧", action: nil, keyEquivalent: "")
         title.isEnabled = false
         menu.addItem(title)
+        let gestureHint = NSMenuItem(title: "拖动旋转 · ⌥ 拖动移动 · 双击回正",action: nil,keyEquivalent: "")
+        gestureHint.isEnabled = false
+        menu.addItem(gestureHint)
         statusMenuItem = NSMenuItem(title: model.status, action: nil, keyEquivalent: "")
         statusMenuItem.isEnabled = false
         menu.addItem(statusMenuItem)
@@ -67,6 +73,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         menu.addItem(pauseItem)
         visibilityItem = item("隐藏 Miho", #selector(toggleVisible))
         menu.addItem(visibilityItem)
+        menu.addItem(item("回到正面", #selector(resetRotation)))
+        autoReturnItem = item("松手后自动回正", #selector(toggleAutoReturn))
+        menu.addItem(autoReturnItem)
+        menu.addItem(item("自定义角色…", #selector(showEditor)))
         menu.addItem(item("舞步预览…", #selector(showStudio)))
         menu.addItem(.separator())
         let sliderItem = NSMenuItem()
@@ -92,6 +102,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         statusMenuItem.title = model.status
         pauseItem.title = model.enabled ? "暂停律动" : "开始律动"
         visibilityItem.title = isVisible ? "隐藏 Miho" : "显示 Miho"
+        autoReturnItem.state = model.autoReturnRotation ? .on : .off
     }
 
     public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -103,19 +114,33 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
     @objc private func togglePause() { model.setEnabled(!model.enabled) }
     @objc private func toggleVisible() { isVisible.toggle(); companion.setVisible(isVisible) }
     @objc private func retry() { model.retry() }
+    @objc private func resetRotation() { model.resetRotation() }
+    @objc private func toggleAutoReturn() { model.autoReturnRotation.toggle() }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func showStudio() {
         if studioWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 650,height: 620),
                                   styleMask: [.titled,.closable,.miniaturizable],backing: .buffered,defer: false)
             window.title = "Miho · 舞步预览"
-            window.contentView = NSHostingView(rootView: DanceStudioView())
+            window.contentView = NSHostingView(rootView: DanceStudioView(model: model))
             window.isReleasedWhenClosed = false
             window.center()
             studioWindow = window
         }
         NSApp.activate(ignoringOtherApps: true)
         studioWindow?.makeKeyAndOrderFront(nil)
+    }
+    @objc private func showEditor() {
+        if editorWindow == nil {
+            let window = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 790,height: 650),
+                                  styleMask: [.titled,.closable,.miniaturizable],backing: .buffered,defer: false)
+            window.title = "Miho · 自定义角色"
+            window.contentView = NSHostingView(rootView: CharacterEditorView(model: model,onDone: { [weak window] in window?.close() }))
+            window.isReleasedWhenClosed = false
+            window.center(); editorWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        editorWindow?.makeKeyAndOrderFront(nil)
     }
     @objc private func openPermissions() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
@@ -165,7 +190,7 @@ private struct InfoView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Miho 迷糊 🎧").font(.system(size: 27, weight: .semibold, design: .rounded))
             Text("Tencent Music Hackathon · 腾讯音乐黑客松").font(.system(size: 12)).foregroundStyle(.secondary)
-            Text("一个陪你听音乐的 3D 小舞者。\n拖动它换位置，右键查看舞步和调整律动。")
+            Text("一个陪你听音乐的 3D 小舞者。\n拖动旋转 · ⌥ 拖动移动 · 双击回正。")
                 .font(.system(size: 13))
             Divider()
             Text(model.status).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)

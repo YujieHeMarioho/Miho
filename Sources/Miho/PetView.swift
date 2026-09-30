@@ -10,20 +10,22 @@ struct PetView: View {
         AnimatedCharacterView(animation: model.animation)
             .frame(width: Self.desktopSize.width, height: Self.desktopSize.height)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Miho 迷糊，3D 桌面音乐精灵")
+            .accessibilityLabel("\(model.appearance.displayName)，3D 桌面音乐精灵")
             .accessibilityValue(model.status)
-            .help("拖动 Miho 换位置 · 右键调整律动与预览舞步")
+            .help("拖动旋转 · ⌥ 拖动移动 · 双击回正 · 右键自定义角色")
     }
 }
 
 private struct AnimatedCharacterView: View {
     @ObservedObject var animation: CharacterAnimation
-    var body: some View { CharacterView(pose: animation.pose) }
+    var body: some View { CharacterView(pose: animation.frame.pose,rotation: animation.frame.rotation,appearance: animation.frame.appearance) }
 }
 
 /// SwiftUI owns controls; SceneKit owns a persistent Metal scene and its joint animations.
 struct CharacterView: NSViewRepresentable {
     var pose: DancePose
+    var rotation = Rotation3()
+    var appearance = CharacterAppearance()
     var animated = true
     final class Coordinator { let rig = CharacterScene() }
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -35,12 +37,14 @@ struct CharacterView: NSViewRepresentable {
         view.isPlaying = true
         view.preferredFramesPerSecond = 60
         view.rendersContinuously = false
-        view.antialiasingMode = .multisampling4X
+        view.antialiasingMode = .multisampling8X
         view.allowsCameraControl = false
         return view
     }
     func updateNSView(_ view: SCNView, context: Context) {
+        context.coordinator.rig.setAppearance(appearance)
         context.coordinator.rig.apply(pose, duration: animated ? 1/30 : 0)
+        context.coordinator.rig.setInteractionRotation(rotation,duration: animated ? 1/60 : 0)
     }
     static func dismantleNSView(_ view: SCNView, coordinator: Coordinator) { view.isPlaying = false; view.scene = nil }
 }
