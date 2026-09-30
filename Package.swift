@@ -17,7 +17,7 @@ let package = Package(
         .target(name: "MihoDesktop", dependencies: ["MihoCore","CStemSeparator"], path: "Sources/Miho"),
         .executableTarget(name: "Miho", dependencies: ["MihoDesktop"], path: "Sources/MihoLauncher"),
         .testTarget(name: "MihoCoreTests", dependencies: ["MihoCore"]),
-        .testTarget(name: "MihoDesktopTests", dependencies: ["MihoDesktop","CStemSeparator"])
+        .testTarget(name: "MihoDesktopTests", dependencies: ["MihoDesktop","CStemSeparator"], exclude: ["Fixtures"])
     ],
     cxxLanguageStandard: .cxx17
 )

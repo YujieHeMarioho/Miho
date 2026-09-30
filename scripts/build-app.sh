@@ -10,7 +10,9 @@ app="$PWD/dist/Miho.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
 cp Vendor/onnxruntime/lib/libonnxruntime.1.26.0.dylib "$app/Contents/Frameworks/"
 ln -sf libonnxruntime.1.26.0.dylib "$app/Contents/Frameworks/libonnxruntime.1.dylib"
+cp Resources/Models/beatnet.onnx "$app/Contents/Resources/"
 cp Vendor/models/hop128.onnx "$app/Contents/Resources/"
+cp ThirdParty/README.md "$app/Contents/Resources/ThirdParty.md"
 cp ThirdParty/*LICENSE.txt "$app/Contents/Resources/"
 cp Vendor/onnxruntime/ThirdPartyNotices.txt "$app/Contents/Resources/ONNXRuntime-ThirdPartyNotices.txt"
 codesign --force --sign - "$app/Contents/Frameworks/libonnxruntime.1.26.0.dylib"
@@ -27,8 +29,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>Miho</string>
 <key>CFBundleIconFile</key><string>Miho</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.5.0</string>
-<key>CFBundleVersion</key><string>8</string>
+<key>CFBundleShortVersionString</key><string>0.6.0</string>
+<key>CFBundleVersion</key><string>9</string>
 <key>LSMinimumSystemVersion</key><string>14.2</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>

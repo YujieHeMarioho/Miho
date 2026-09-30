@@ -9,6 +9,51 @@ import UniformTypeIdentifiers
 @available(macOS 14.2, *)
 public enum ArtworkExport {
     @MainActor public static func writeMotion(to url: URL) throws {
+        try writeGrooveMotion(to: url)
+    }
+    /// Uses the actual bundled BeatNet model on repository-owned synthesized
+    /// drums. This validates the complete pulse-to-render path, not song quality.
+    @MainActor private static func writeGrooveMotion(to url: URL) throws {
+        let rig = CharacterScene()
+        let renderer = SCNRenderer(device: MTLCreateSystemDefaultDevice(),options: nil)
+        renderer.scene = rig.scene;renderer.pointOfView = rig.camera
+        rig.scene.background.contents = NSColor(srgbRed: 0.97,green: 0.98,blue: 0.99,alpha: 1)
+        let frames = 360, analyzer = try LearnedBeatAnalyzer(), transient = RhythmAnalyzer(analyzeVoice: false)
+        let engine = Choreographer(seed: 42);engine.intensity = 0.8
+        var sample = 0, rhythm = RhythmFrame()
+        guard let destination = CGImageDestinationCreateWithURL(url as CFURL,UTType.gif.identifier as CFString,frames,nil) else { throw NSError(domain: "Miho.Artwork",code: 2) }
+        CGImageDestinationSetProperties(destination,[kCGImagePropertyGIFDictionary:[kCGImagePropertyGIFLoopCount:0]] as CFDictionary)
+        for _ in 0..<frames {
+            try autoreleasepool {
+                for _ in 0..<2 {
+                    for _ in 0..<735 {
+                        let t = Double(sample)/44_100
+                        let position = t*124/60, age = position.truncatingRemainder(dividingBy: 1)*60/124
+                        let kick = age < 0.18 ? 0.45*exp(-age*30)*sin(2*Double.pi*(55*age+70*(1-exp(-age*35))/35)) : 0
+                        let snareAge = (position+1).truncatingRemainder(dividingBy: 2)*60/124
+                        let noise = sin(Double(sample)*12.9898+78.233)*43_758.5453
+                        let n = noise-floor(noise)
+                        let snare = snareAge < 0.12 ? 0.26*(n*2-1)*exp(-snareAge*35) : 0
+                        let hatAge = (position*2).truncatingRemainder(dividingBy: 1)*30/124
+                        let hat = hatAge < 0.035 ? 0.045*(n*2-1)*exp(-hatAge*110) : 0
+                        let value = Float(kick+snare+hat)
+                        rhythm = transient.consume(value)
+                        rhythm.pulse = try analyzer.consume(value)
+                        rhythm.drumEnergy = rhythm.energy
+                        sample += 1
+                    }
+                    engine.update(dt: 1/60,rhythm: rhythm)
+                }
+                rig.apply(engine.pose,duration: 0)
+                let image = renderer.snapshot(atTime: 0,with: CGSize(width: 390,height: 450),antialiasingMode: .multisampling4X)
+                guard let cg = image.cgImage(forProposedRect: nil,context: nil,hints: nil) else { throw NSError(domain: "Miho.Artwork",code: 3) }
+                CGImageDestinationAddImage(destination,cg,[kCGImagePropertyGIFDictionary:[kCGImagePropertyGIFDelayTime:1.0/30]] as CFDictionary)
+            }
+        }
+        guard CGImageDestinationFinalize(destination) else { throw NSError(domain: "Miho.Artwork",code: 4) }
+    }
+
+    @MainActor public static func writeVocalMotion(to url: URL) throws {
         let rig = CharacterScene()
         let renderer = SCNRenderer(device: MTLCreateSystemDefaultDevice(),options: nil)
         renderer.scene = rig.scene; renderer.pointOfView = rig.camera

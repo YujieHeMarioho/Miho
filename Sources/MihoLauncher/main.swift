@@ -3,6 +3,10 @@ import MihoDesktop
 
 if #available(macOS 14.2, *) {
     let app = NSApplication.shared
+    if let index = CommandLine.arguments.firstIndex(of: "--analyze-file"), CommandLine.arguments.indices.contains(index+1) {
+        do { try AudioFileProbe.run(url: URL(fileURLWithPath: CommandLine.arguments[index+1]));exit(0) }
+        catch { fputs("Miho audio probe: \(error.localizedDescription)\n",stderr);exit(1) }
+    }
     let motionExport = CommandLine.arguments.contains("--export-motion")
     if let index = CommandLine.arguments.firstIndex(of: motionExport ? "--export-motion" : "--export-artifacts"),
        CommandLine.arguments.indices.contains(index + 1) {

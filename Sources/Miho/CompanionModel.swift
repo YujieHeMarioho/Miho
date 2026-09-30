@@ -184,9 +184,11 @@ final class CompanionModel: ObservableObject {
         rhythm.energy = energy
         // The latest audio age already includes all windows in its callback.
         // Add only time since delivery, so a render frame never restarts the beat.
+        if rhythm.pulse.bpm > 0 { rhythm.pulse.position += max(0,now-current.lastCallback)*rhythm.pulse.bpm/60 }
         if rhythm.beatAge.isFinite { rhythm.beatAge += max(0,now-current.lastCallback) }
         if rhythm.vocalAccentAge.isFinite { rhythm.vocalAccentAge += max(0,now-current.lastCallback) }
         if !enabled || sleeping || now-current.lastCallback > 0.25 {
+            rhythm.pulse.confidence = 0
             rhythm.bass = 0; rhythm.mid = 0; rhythm.treble = 0; rhythm.transient = 0
             rhythm.vocalPresence = 0; rhythm.vocalPitch = 0; rhythm.vocalEnergy = 0; rhythm.vocalConfidence = 0; rhythm.vocalSustain = 0; rhythm.vocalPitchMotion = 0
         }

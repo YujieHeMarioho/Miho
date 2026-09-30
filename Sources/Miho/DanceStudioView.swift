@@ -11,21 +11,21 @@ struct DanceStudioView: View {
             VStack(alignment: .leading,spacing: 12) {
                 Text("MIHO / LIVE BEAT").font(.system(size: 10,weight: .bold,design: .monospaced)).tracking(2).foregroundStyle(accent)
                 Text(model.appearance.displayName).font(.system(size: 30,weight: .bold,design: .rounded))
-                Text("跟着唱腔，自由地跳。").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("听着拍子，自然地跳。").font(.system(size: 12)).foregroundStyle(.secondary)
                 LiveDancePreview(animation: model.animation)
                 Text(model.status).font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false,vertical: true)
             }.padding(28).frame(width: 350)
                 .background(LinearGradient(colors: [Color(red: 0.91,green: 0.97,blue: 0.99),Color(red: 0.98,green: 0.98,blue: 0.96)],startPoint: .topLeading,endPoint: .bottomTrailing))
             VStack(alignment: .leading,spacing: 16) {
-                Text("跟随主唱").font(.system(size: 20,weight: .bold,design: .rounded))
-                Label(!model.enabled ? "人声分析已暂停" : model.separationReady ? "本机人声分离已连接" : "人声分离未连接",systemImage: "waveform")
+                Text("跟拍律动").font(.system(size: 20,weight: .bold,design: .rounded))
+                Label(!model.enabled ? "律动已暂停" : model.animation.frame.rhythm.pulse.confidence > 0.45 ? String(format: "正在跟拍 · 约 %.0f BPM",model.animation.frame.rhythm.pulse.bpm) : model.separationReady ? "正在听拍子…" : "音频分析未连接",systemImage: "waveform")
                     .font(.system(size: 11)).foregroundStyle(accent)
                 VStack(alignment: .leading,spacing: 16) {
-                    Label("唱腔上扬，身体抬起",systemImage: "arrow.up.right")
-                    Label("长音持续，姿态保持",systemImage: "pause")
-                    Label("收句回落，顺势放松",systemImage: "arrow.down.right")
-                    Label("人声重音，加一点力度",systemImage: "bolt")
+                    Label("每拍点头，身体自然起伏",systemImage: "music.note")
+                    Label("拍间连贯，左右换重心",systemImage: "arrow.left.and.right")
+                    Label("唱腔上扬，长音继续舒展",systemImage: "arrow.up.right")
+                    Label("重音加力，碎拍轻轻带过",systemImage: "bolt")
                 }.font(.system(size: 12)).padding(.vertical,16)
                 HStack {
                     Text("动作幅度").font(.system(size: 12,weight: .semibold))
@@ -33,7 +33,7 @@ struct DanceStudioView: View {
                     Text(String(format: "%.1f×",model.motionIntensity)).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Slider(value: $model.motionIntensity,in: 0.5...1.5,step: 0.1).accessibilityLabel("动作幅度")
-                Text("动作连续跟随人声的力度和音高，不再循环播放固定舞步。伴奏鼓点轻轻带过长音。")
+                Text("先听几拍找到节奏，再持续点头和摆身。快歌保持稳健的身体律动，人声叠加轻重和延展。")
                     .font(.system(size: 11)).foregroundStyle(.secondary).lineSpacing(4)
                     .fixedSize(horizontal: false,vertical: true)
                 Button(model.enabled ? "暂停律动" : "开始律动") { model.setEnabled(!model.enabled) }

@@ -2,6 +2,8 @@ import Foundation
 import Accelerate
 
 public struct RhythmFrame: Equatable {
+    /// Learned musical pulse, separate from short transient/attack features.
+    public var pulse = BeatClockFrame()
     public var energy: Double = 0
     public var bass: Double = 0
     public var mid: Double = 0

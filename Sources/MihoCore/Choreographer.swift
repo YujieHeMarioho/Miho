@@ -6,11 +6,12 @@ public enum DanceMood: String, Sendable {
 }
 /// Describes what the audio is doing; these are not selectable gesture programs.
 public enum VocalGesture: String, Sendable {
-    case idle, listening, rising, holding, falling, accent
+    case idle, listening, rising, holding, falling, accent, bouncing
     public var label: String {
         switch self {
         case .idle: return "安静呼吸"
         case .listening: return "跟随唱句"
+        case .bouncing: return "跟拍点头 · 身体律动"
         case .rising: return "随唱腔抬起"
         case .holding: return "长音保持"
         case .falling: return "随收句放松"
@@ -49,9 +50,9 @@ public struct DancePose: Equatable, Sendable {
     }
 }
 
-/// Continuous audio-to-pose mapping. No dance clips, beat oscillator or timed
-/// left/right loop. A vocal phrase keeps its pitch anchor and orientation until
-/// the singer releases it. Accents settle back into that current posture.
+/// Continuous, layered movement: learned musical pulse drives a shared body
+/// groove; separated vocals add phrase direction and accents. No timed dance
+/// clips. A sparse sustained vocal can hold its posture without a forced loop.
 public final class Choreographer {
     public private(set) var mood: DanceMood = .dreamy
     public private(set) var gesture: VocalGesture = .idle
@@ -61,6 +62,7 @@ public final class Choreographer {
     private var velocity = DancePose()
     private var time = 0.0, phraseAge = 0.0, gap = 1.0, voice = 0.0, pitchOffset = 0.0, phrasePeak = 0.0
     private var pitchAnchor: Double?, phraseSide = 1.0, phraseIndex = 0
+    private var groove = 0.0, groovePosition = 0.0, grooveInitialized = false, halfTimeBody = false
     private var emphasis = 0.0, emphasisTarget = 0.0, releaseAt = -1.0, lastHit = -10.0
     private var lastBeat: UInt64 = 0, lastVocal: UInt64 = 0
     private let personality: Double
@@ -73,6 +75,7 @@ public final class Choreographer {
         // Keep the active phrase across a brief analysis reconnect. A genuine
         // vocal gap releases it through the same path as any other end of phrase.
         emphasisTarget = 0; releaseAt = -1; lastHit = -10
+        grooveInitialized = false
     }
     @discardableResult public func update(dt rawDT: Double,rhythm r: RhythmFrame,enabled: Bool = true) -> DancePose {
         let dt = rawDT.isFinite ? min(0.1,max(0,rawDT)) : 0
@@ -102,7 +105,25 @@ public final class Choreographer {
         }
         if gap > 0.24 { pitchOffset *= exp(-dt/0.28) }
         let extensionAmount = 1-exp(-max(0,phraseAge-0.12)/0.8)
-        let held = max(unit(r.vocalSustain),voiced ? extensionAmount*0.85 : 0)
+        // Sustained speech/rap is not automatically a held musical note. The
+        // beat layer remains active even when voice fills the entire verse.
+        let held = unit(r.vocalSustain)*unit(r.vocalConfidence)
+        let bpm = r.pulse.bpm.isFinite ? min(215,max(55,r.pulse.bpm)) : 120
+        let beatSupport = enabled && r.pulse.bpm > 0 && r.pulse.position.isFinite ? unit(r.pulse.confidence) : 0
+        let audible = min(1,energy*8)
+        let desiredGroove = beatSupport*audible
+        groove += (desiredGroove-groove)*(1-exp(-dt/(desiredGroove > groove ? 0.24 : 0.20)))
+        if beatSupport > 0.05 {
+            if !grooveInitialized { groovePosition = r.pulse.position;grooveInitialized = true }
+            else {
+                // Blend phase corrections, never teleport a body pose when a
+                // tempo hypothesis changes or a new capture session starts.
+                groovePosition += dt*bpm/60
+                let error = r.pulse.position-groovePosition
+                let wrapped = error-round(error/2)*2
+                groovePosition += min(dt*bpm/60*0.65,max(-dt*bpm/60*0.65,wrapped*dt*4))
+            }
+        } else { groovePosition += dt*bpm/60 }
         var hit = 0.0
         if r.beatCount < lastBeat { lastBeat = 0 }
         if r.beatCount != lastBeat {
@@ -110,13 +131,16 @@ public final class Choreographer {
             if enabled && r.beatAge.isFinite && r.beatAge < 0.15 && r.beatAge >= 0 && time-r.beatAge-lastHit > 0.22 {
                 // Separated drums: weak subdivisions do not shake a held vocal.
                 hit = unit(r.beatStrength)*unit(r.beatWeight)*(1-held*0.85)*(1-min(1,voice)*0.45)
+                // Once a pulse is established, accents colour the groove rather
+                // than launching a new impulse at every detected drum onset.
+                hit *= 1-groove*0.85
             }
         }
         if r.vocalAccentCount < lastVocal { lastVocal = 0 }
         if r.vocalAccentCount != lastVocal {
             lastVocal = r.vocalAccentCount
             if enabled && r.vocalAccentAge.isFinite && (0..<0.15).contains(r.vocalAccentAge) {
-                hit = max(hit,unit(r.vocalAccentStrength))
+                hit = max(hit,unit(r.vocalAccentStrength)*(1-groove*0.60))
             }
         }
         if hit > 0.18 && energy > 0.005 {
@@ -125,7 +149,7 @@ public final class Choreographer {
         if time > releaseAt || !enabled { emphasisTarget *= exp(-dt/0.16) }
         emphasis += (emphasisTarget-emphasis)*(1-exp(-dt/(emphasisTarget > emphasis ? 0.025 : 0.09)))
         impact = emphasis*power
-        let a = voice*power
+        let a = voice*power*(1-groove*0.65)
         var target = DancePose()
         // No periodic idle motion while audio is active or a phrase is held.
         let idle = 1-min(1,max(energy,voice)*12)
@@ -141,16 +165,53 @@ public final class Choreographer {
         target.head.x = -a*(extensionAmount*0.035+pitchOffset*0.045)
         target.head.y = -target.body.y*0.18
         target.leftEar.x = -a*extensionAmount*0.06; target.rightEar.x = -a*extensionAmount*0.05
+        if groove > 0.001 {
+            let g = groove*power
+            // At very fast tempi dancers often keep a half-time torso bounce.
+            // The head still marks each beat; weight transfers take two beats.
+            if bpm > 160 { halfTimeBody = true } else if bpm < 145 { halfTimeBody = false }
+            let bodyRate = halfTimeBody ? 0.5 : 1.0
+            let omega = 2*Double.pi*bpm/60
+            let bodyOmega = omega*bodyRate
+            let bodyPhase = 2*Double.pi*groovePosition*bodyRate
+            let headPhase = 2*Double.pi*groovePosition
+            let sidePhase = Double.pi*groovePosition
+            // Lead the target by the measured spring's phase response so the
+            // rendered dip/nod, rather than its target, falls on the beat.
+            let bouncePhase = bodyPhase+2*atan(bodyOmega/22)
+            let nodPhase = headPhase+2*atan(omega/24)
+            let turnPhase = sidePhase+2*atan(omega*0.5/18)
+            let vitality = 0.65+0.35*unit(max(r.drumEnergy,r.bass))
+            let bounce = min(0.085,6.0/(bodyOmega*bodyOmega))*g*vitality*(1+pow(bodyOmega/22,2))
+            let torso = min(0.13,9.0/(omega*omega))*g*(1+pow(omega/20,2))
+            let nod = min(0.12,11.0/(omega*omega))*g*(1+pow(omega/24,2))
+            let weight = sin(turnPhase)
+            target.y += bounce*(1-cos(bouncePhase))
+            target.x += g*0.11*weight
+            target.z += g*0.025*sin(bouncePhase)
+            target.body.x += torso*cos(headPhase+2*atan(omega/20))
+            target.body.y += g*0.19*sin(turnPhase)
+            target.body.z -= g*0.085*sin(sidePhase+2*atan(omega*0.5/20))
+            target.head.x += nod*cos(nodPhase)
+            target.head.y -= g*0.07*sin(sidePhase+2*atan(omega*0.5/20))
+            target.squash -= g*0.010*cos(bodyPhase+2*atan(bodyOmega/26))
+            // Secondary motion is smaller and follows the same pulse; hats
+            // never get a separate high-frequency full-body shake.
+            target.leftEar.x += g*0.04*sin(bodyPhase-0.25)
+            target.rightEar.x += g*0.035*sin(bodyPhase-0.4)
+            target.accessoryBounce += g*0.005*sin(bodyPhase-0.2)
+        }
         // A physical impulse has continuous attack/release, independent of pose.
         target.y += impact*0.045
         target.z += impact*0.07
         target.body.x -= impact*0.09
         target.head.x += impact*0.15
         target.squash -= impact*0.025
-        target.accessoryBounce = impact*0.01
+        target.accessoryBounce += impact*0.01
         target.y = min(0.38,max(0,target.y)); target.x = min(0.2,max(-0.2,target.x))
-        mood = impact > 0.20 ? .lively : voice > 0.03 ? .groovy : .dreamy
-        if impact > 0.22 && held < 0.5 { gesture = .accent }
+        mood = groove > 0.35 || impact > 0.20 ? .lively : voice > 0.03 ? .groovy : .dreamy
+        if groove > 0.18 { gesture = .bouncing }
+        else if impact > 0.22 && held < 0.5 { gesture = .accent }
         else if !voiced && voice > 0.02 { gesture = .falling }
         else if voice < 0.02 { gesture = .idle }
         else if r.vocalPitchMotion > 0.07 { gesture = .rising }

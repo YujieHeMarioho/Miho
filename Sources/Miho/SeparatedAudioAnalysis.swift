@@ -32,6 +32,7 @@ final class AnalysisResampler {
 /// callback. Native inference uses preallocated tensors and 128-sample hops.
 final class SeparatedAudioAnalyzer {
     private let separator: OpaquePointer
+    private let learnedBeat: LearnedBeatAnalyzer
     private var resampler: AnalysisResampler
     private let sampleRate: Double
     private var mix = RhythmAnalyzer(sampleRate: 44_100,analyzeVoice: false)
@@ -46,6 +47,7 @@ final class SeparatedAudioAnalyzer {
         return URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Vendor/models/hop128.onnx")
     }
     init(sampleRate: Double,modelURL: URL = SeparatedAudioAnalyzer.modelURL) throws {
+        learnedBeat = try LearnedBeatAnalyzer()
         self.sampleRate = sampleRate; resampler = AnalysisResampler(sampleRate: sampleRate)
         let modelData = try Data(contentsOf: modelURL,options: .mappedIfSafe)
         let hash = SHA256.hash(data: modelData).map { String(format: "%02x",$0) }.joined()
@@ -60,7 +62,7 @@ final class SeparatedAudioAnalyzer {
     }
     deinit { miho_separator_destroy(separator) }
     func reset() {
-        miho_separator_reset(separator)
+        miho_separator_reset(separator); learnedBeat.reset()
         resampler = AnalysisResampler(sampleRate: sampleRate)
         mix = RhythmAnalyzer(sampleRate: 44_100,analyzeVoice: false)
         voice = RhythmAnalyzer(sampleRate: 44_100)
@@ -91,8 +93,11 @@ final class SeparatedAudioAnalyzer {
         result.error = nil
         var mixFrame = RhythmFrame(), vocalFrame = RhythmFrame(), drumFrame = RhythmFrame()
         var vocalPower = 0.0, mixPower = 0.0
+        var pulse = BeatClockFrame()
         for index in 0..<128 {
             let original = (left[index]+right[index])*0.5
+            do { pulse = try learnedBeat.consume(original) }
+            catch { result.error = "节拍跟踪中断：\(error.localizedDescription)";result.rhythm = RhythmFrame();return }
             mixFrame = mix.consume(original,sensitivity: sensitivity)
             vocalFrame = voice.consume(vocals[index],sensitivity: sensitivity)
             drumFrame = percussion.consume(drums[index]+bass[index]*0.18,sensitivity: sensitivity)
@@ -113,6 +118,7 @@ final class SeparatedAudioAnalyzer {
         mixFrame.vocalAccentCount = vocalFrame.vocalAccentCount
         mixFrame.vocalAccentAge = vocalFrame.vocalAccentAge+128/44_100.0
         mixFrame.vocalAccentStrength = vocalFrame.vocalAccentStrength
+        mixFrame.pulse = pulse
         result.rhythm = mixFrame
     }
 }
