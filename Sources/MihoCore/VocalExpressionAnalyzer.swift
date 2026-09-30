@@ -61,6 +61,10 @@ final class VocalExpressionAnalyzer {
         let target = 1-exp(-rms*5*sensitivity)
         result.energy += (target-result.energy)*(1-exp(-dt/(target > result.energy ? 0.045 : 0.15)))
         result.confidence += (confidence-result.confidence)*(1-exp(-dt/(confidence > result.confidence ? 0.055 : 0.12)))
+        // A fresh syllable starts a new extension even if pitch stays voiced
+        // through the whole verse. Small vibrato and gradual crescendos do not.
+        let rearticulation = target > previousTarget+max(0.018,target*0.10) && target > floor*0.85+0.015
+        if rearticulation { voiceAge = 0 }
         if confidence > 0.45 && target > 0.04 { voiceAge += dt; gap = 0 }
         else {
             gap += dt
@@ -86,11 +90,11 @@ final class VocalExpressionAnalyzer {
         result.pitchMotion += (pitchMotion-result.pitchMotion)*(1-exp(-dt/0.16))
         // A quick voiced rise is an accent; a held vowel does not retrigger as it
         // vibrates. Briefly defer the attack until periodicity has been measured.
-        if target > previousTarget+0.065 && target > floor*1.35+0.05 {
-            pendingAttack = min(1,(target-previousTarget)*3+target*0.55)
+        if rearticulation && target > floor*1.05+0.025 {
+            pendingAttack = min(1,(target-previousTarget)*4+target*0.60)
             pendingUntil = clock+0.12
         }
-        if clock <= pendingUntil && pendingAttack > 0 && result.confidence > 0.40 && clock-lastAccent >= 0.32 {
+        if clock <= pendingUntil && pendingAttack > 0 && result.confidence > 0.40 && clock-lastAccent >= 0.22 {
             result.accentCount &+= 1; lastAccent = clock
             result.accentStrength = pendingAttack*(0.55+0.45*result.confidence)
             result.accentAge = 0; pendingAttack = 0

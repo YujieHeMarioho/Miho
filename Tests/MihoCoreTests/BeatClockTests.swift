@@ -49,21 +49,24 @@ final class BeatClockTests: XCTestCase {
         }
         XCTAssertLessThan(errors.reduce(0,+)/Double(errors.count),0.10)
     }
-    func testContinuousRapVoiceDoesNotSuppressGrooveAndPauseSettles() {
-        let e = Choreographer(seed: 42)
+    func testSameVocalPhraseIgnoresDifferentAccompanimentClocksAndPauseSettles() {
+        let a = Choreographer(seed: 42), b = Choreographer(seed: 42)
         var f = RhythmFrame();f.energy = 0.8;f.drumEnergy = 0.7
-        f.vocalEnergy = 0.6;f.vocalPresence = 0.95;f.vocalConfidence = 0.1;f.vocalSustain = 0.9
+        f.vocalPresence = 0.95;f.vocalConfidence = 0.1;f.vocalSustain = 0
         f.pulse.bpm = 124;f.pulse.confidence = 0.9
-        var heights: [Double] = [], turns: [Double] = []
+        var heights: [Double] = []
         for i in 0..<600 {
+            f.vocalEnergy = 0.35+0.25*sin(Double(i)/60*2*Double.pi*2.5)
             f.pulse.position = Double(i+1)/60*124/60
-            let p = e.update(dt: 1/60,rhythm: f)
-            if i > 180 { heights.append(p.y);turns.append(p.body.y) }
+            let p = a.update(dt: 1/60,rhythm: f)
+            var other = f;other.pulse.bpm = 174;other.pulse.position = Double(i+1)/60*174/60+0.45
+            let q = b.update(dt: 1/60,rhythm: other)
+            XCTAssertEqual(p,q,"An unrelated beat clock must not drive the singer's pose")
+            if i > 180 { heights.append(p.y) }
         }
-        XCTAssertGreaterThan(heights.max()!-heights.min()!,0.045)
-        XCTAssertGreaterThan(turns.max()!-turns.min()!,0.15)
-        XCTAssertEqual(e.gesture,.bouncing)
-        for _ in 0..<90 { e.update(dt: 1/60,rhythm: f,enabled: false) }
-        XCTAssertLessThan(e.pose.y,0.01)
+        XCTAssertGreaterThan(heights.max()!-heights.min()!,0.025)
+        XCTAssertEqual(a.gesture,.listening)
+        for _ in 0..<90 { a.update(dt: 1/60,rhythm: f,enabled: false) }
+        XCTAssertLessThan(a.pose.y,0.01)
     }
 }

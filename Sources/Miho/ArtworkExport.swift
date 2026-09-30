@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 @available(macOS 14.2, *)
 public enum ArtworkExport {
     @MainActor public static func writeMotion(to url: URL) throws {
-        try writeGrooveMotion(to: url)
+        try writeVocalMotion(to: url)
     }
     /// Uses the actual bundled BeatNet model on repository-owned synthesized
     /// drums. This validates the complete pulse-to-render path, not song quality.

@@ -58,6 +58,19 @@ final class VocalExpressionTests: XCTestCase {
         for phrase in phrases { XCTAssertLessThan((accents.filter { $0 > phrase }.min() ?? 100)-phrase,0.15) }
         XCTAssertLessThan(frame.vocalSustain,0.25)
     }
+    func testRepeatedSamePitchSyllablesDoNotAccumulateOneLongHeldNote() {
+        let analyzer = RhythmAnalyzer();var frame = RhythmFrame(), sustained: [Double] = []
+        for i in 0..<144_000 {
+            let t = Double(i)/48_000, phase = (t/0.28).truncatingRemainder(dividingBy: 1)
+            let amplitude = 0.04+0.15*pow(sin(Double.pi*phase),8)
+            frame = analyzer.consume(voicedSample(2*Double.pi*220*t,amplitude))
+            if i%800 == 0 && t > 1 { sustained.append(frame.vocalSustain) }
+        }
+        XCTAssertGreaterThan(frame.vocalConfidence,0.80)
+        XCTAssertGreaterThanOrEqual(frame.vocalAccentCount,4)
+        XCTAssertLessThan(sustained.reduce(0,+)/Double(sustained.count),0.25)
+        XCTAssertLessThan(sustained.max() ?? 1,0.50)
+    }
     func testHatsAndLowKicksDoNotMasqueradeAsHeldSinging() {
         for frequency in [60.0,8_000.0] {
             let analyzer = RhythmAnalyzer(); var frame = RhythmFrame()
@@ -84,7 +97,7 @@ final class VocalExpressionTests: XCTestCase {
             if (i+1)%800 == 0 {
                 frame.beatCount = 0 // isolate the singing path from the drum path
                 engine.update(dt: 1/60,rhythm: frame)
-                if response == nil && engine.impact > 0.15 && engine.pose.body.x < -0.012 { response = time }
+                if response == nil && engine.impact > 0.15 && engine.pose.z > 0.015 { response = time }
             }
         }
         XCTAssertNotNil(detected); XCTAssertNotNil(response)

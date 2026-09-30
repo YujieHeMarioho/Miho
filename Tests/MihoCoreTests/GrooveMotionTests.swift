@@ -2,7 +2,7 @@ import XCTest
 @testable import MihoCore
 
 final class GrooveMotionTests: XCTestCase {
-    func testRenderedNodLandsOnEveryBeatAtSlowAndFastTempi() {
+    func testInstrumentalFallbackNodFollowsTrackedBeatAtSlowAndFastTempi() {
         for bpm in [88.0,124,174] {
             let engine = Choreographer(seed: 42)
             var f = RhythmFrame();f.energy = 0.8;f.drumEnergy = 0.7

@@ -40,7 +40,7 @@ final class SeparatedAudioAnalyzer {
     private var percussion = RhythmAnalyzer(sampleRate: 44_100,analyzeVoice: false)
     private var left = [Float](repeating: 0,count: 128), right = [Float](repeating: 0,count: 128)
     private var vocals = [Float](repeating: 0,count: 128), drums = [Float](repeating: 0,count: 128), bass = [Float](repeating: 0,count: 128)
-    private var count = 0, presence = 0.0
+    private var count = 0, presence = 0.0, vocalEnvelope = 0.0
     private var result = SeparationResult()
     static var modelURL: URL {
         if let bundled = Bundle.main.url(forResource: "hop128",withExtension: "onnx") { return bundled }
@@ -67,15 +67,16 @@ final class SeparatedAudioAnalyzer {
         mix = RhythmAnalyzer(sampleRate: 44_100,analyzeVoice: false)
         voice = RhythmAnalyzer(sampleRate: 44_100)
         percussion = RhythmAnalyzer(sampleRate: 44_100,analyzeVoice: false)
-        count = 0; presence = 0; result = SeparationResult()
+        count = 0; presence = 0; vocalEnvelope = 0; result = SeparationResult()
     }
     func consume(stereo: [Float],sensitivity: Double) -> SeparationResult {
+        let gain = sensitivity.isFinite ? min(2,max(0.5,sensitivity)) : 1
         for index in stride(from: 0,to: stereo.count-1,by: 2) {
             resampler.consume(left: stereo[index],right: stereo[index+1]) { l,r in
                 self.left[self.count] = l.isFinite ? l : 0
                 self.right[self.count] = r.isFinite ? r : 0
                 self.count += 1
-                if self.count == 128 { self.analyzeHop(sensitivity: sensitivity); self.count = 0 }
+                if self.count == 128 { self.analyzeHop(sensitivity: gain); self.count = 0 }
             }
         }
         return result
@@ -107,12 +108,17 @@ final class SeparatedAudioAnalyzer {
         // Stem activity permits rough/unvoiced syllables; pitch confidence still
         // comes solely from periodicity and is required to move the pitch axis.
         let ratio = sqrt(vocalPower/max(mixPower,1e-12))
-        let activity = min(1,max(0,(ratio-0.07)/0.30))*min(1,vocalFrame.vocalEnergy*12)
+        // Full-band vocal loudness includes breathy/unvoiced syllables. Pitch
+        // periodicity remains separate and is only used for melody and sustain.
+        let envelopeTarget = 1-exp(-sqrt(vocalPower/128)*5*sensitivity)
+        vocalEnvelope += (envelopeTarget-vocalEnvelope)*(1-exp(-128/44_100.0/(envelopeTarget > vocalEnvelope ? 0.025 : 0.10)))
+        let vocalLevel = max(vocalFrame.vocalEnergy,vocalEnvelope)
+        let activity = min(1,max(0,(ratio-0.07)/0.30))*min(1,vocalLevel*12)
         presence += (activity-presence)*(1-exp(-128/44_100.0/(activity > presence ? 0.035 : 0.18)))
         mixFrame.beatCount = drumFrame.beatCount; mixFrame.beatAge = drumFrame.beatAge+128/44_100.0
         mixFrame.beatStrength = drumFrame.beatStrength; mixFrame.beatWeight = drumFrame.beatWeight
         mixFrame.drumEnergy = drumFrame.energy
-        mixFrame.vocalEnergy = vocalFrame.vocalEnergy; mixFrame.vocalPresence = presence
+        mixFrame.vocalEnergy = vocalLevel; mixFrame.vocalPresence = presence
         mixFrame.vocalConfidence = vocalFrame.vocalConfidence; mixFrame.vocalSustain = vocalFrame.vocalSustain
         mixFrame.vocalPitch = vocalFrame.vocalPitch; mixFrame.vocalPitchMotion = vocalFrame.vocalPitchMotion
         mixFrame.vocalAccentCount = vocalFrame.vocalAccentCount
