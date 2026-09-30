@@ -24,11 +24,27 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         if CommandLine.arguments.contains("--diagnostics") { showInfo() }
         if CommandLine.arguments.contains("--dance-studio") { showStudio() }
         if CommandLine.arguments.contains("--character-editor") { showEditor() }
+        if CommandLine.arguments.contains("--trace-motion") {
+            let started = ProcessInfo.processInfo.systemUptime
+            let trace = Timer(timeInterval: 0.1,repeats: true) { [weak self] timer in
+                guard let self else { timer.invalidate(); return }
+                let elapsed = ProcessInfo.processInfo.systemUptime-started
+                if elapsed > 60 { timer.invalidate(); return }
+                let f = self.model.animation.frame
+                let capture = self.model.captureDiagnostics
+                print(String(format: "motion t=%.2f mix=%.3f voice=%.3f presence=%.3f confidence=%.3f pitch=%.1f sustain=%.3f y=%.3f yaw=%.3f impact=%.3f inferenceMs=%.3f latencyMs=%.1f ready=%d inputAgeMs=%.1f analysisMs=%.1f buffer=%d generation=%llu",
+                    elapsed,f.rhythm.energy,f.rhythm.vocalEnergy,f.rhythm.vocalPresence,f.rhythm.vocalConfidence,
+                    f.rhythm.vocalPitch,f.rhythm.vocalSustain,f.pose.y,f.pose.body.y,f.impact,self.model.inferenceMs,
+                    self.model.worstCaptureToMotionMs,self.model.separationReady ? 1 : 0,capture.inputAgeMs,capture.analysisMs,capture.bufferFrames,capture.generation))
+                fflush(stdout)
+            }
+            RunLoop.main.add(trace,forMode: .common)
+        }
         if CommandLine.arguments.contains("--probe") {
             model.setEnabled(true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
                 guard let self else { return }
-                print("callbacks=\(self.model.callbackCount) audible=\(self.model.audibleCallbackCount) beats=\(self.model.beats) energy=\(self.model.motion.energy) captureToMotionWorstMs=\(self.model.worstCaptureToMotionMs)")
+                print("callbacks=\(self.model.callbackCount) audible=\(self.model.audibleCallbackCount) beats=\(self.model.beats) energy=\(self.model.motion.energy) captureToMotionWorstMs=\(self.model.worstCaptureToMotionMs) separated=\(self.model.separationReady) inferenceMs=\(self.model.inferenceMs)")
                 NSApp.terminate(nil)
             }
         } else if !UserDefaults.standard.bool(forKey: "hasSeenWelcome") {
@@ -194,7 +210,7 @@ private struct InfoView: View {
                 .font(.system(size: 13))
             Divider()
             Text(model.status).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
-            Text("音频回调：\(model.callbackCount)  ·  有声音：\(model.audibleCallbackCount)\n检测到的鼓点：\(model.beats)\n捕获帧到动作状态（最大）：\(Int(model.worstCaptureToMotionMs)) ms")
+            Text("音频回调：\(model.callbackCount)  ·  有声音：\(model.audibleCallbackCount)\n检测到的鼓点：\(model.beats)\n捕获帧到动作状态（最大）：\(Int(model.worstCaptureToMotionMs)) ms\n本机分离：\(model.separationReady ? "已连接" : "等待连接") · 单次处理 \(String(format: "%.1f",model.inferenceMs)) ms")
                 .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
             Text("声音只在本机内存中实时处理，不保存、不上传。\n如果正在播放却没反应，请检查音频捕获权限并重试。")
                 .font(.system(size: 11)).foregroundStyle(.secondary)

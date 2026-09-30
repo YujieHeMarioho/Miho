@@ -14,23 +14,55 @@ public enum ArtworkExport {
         renderer.scene = rig.scene; renderer.pointOfView = rig.camera
         // GIF has only one-bit transparency. Opaque preview frames prevent accumulated trails.
         rig.scene.background.contents = NSColor(srgbRed: 0.97,green: 0.98,blue: 0.99,alpha: 1)
-        let frames = 240
+        let frames = 300
+        let engine = Choreographer(seed: 42)
+        let analyzer = RhythmAnalyzer()
+        let drums = RhythmAnalyzer(analyzeVoice: false)
+        var rhythm = RhythmFrame(), sample = 0, vocalPhase = 0.0
         guard let destination = CGImageDestinationCreateWithURL(url as CFURL,UTType.gif.identifier as CFString,frames,nil) else {
             throw NSError(domain: "Miho.Artwork",code: 2)
         }
         CGImageDestinationSetProperties(destination,[kCGImagePropertyGIFDictionary:[kCGImagePropertyGIFLoopCount:0]] as CFDictionary)
-        for index in 0..<frames {
+        for _ in 0..<frames {
             try autoreleasepool {
-                let time = Double(index)/20, moves = DanceMove.allCases
-                let step = index/40
-                let blend = min(1,Double(index%40)/8)
-                let previous = moves[max(0,step-1)], move = moves[step]
-                let p = Choreographer.dance(move: previous,phase: time*2,energy: 0.8)
-                    .mixed(with: Choreographer.dance(move: move,phase: time*2,energy: 0.8),by: blend*blend*(3-2*blend))
-                rig.apply(p,duration: 0)
+                // Feed the real analyzer: two short voiced syllables, a held
+                // melodic rise/fall, kicks/snares and light hats per phrase.
+                for _ in 0..<2 {
+                    for _ in 0..<800 {
+                        let time = Double(sample)/48_000, phrase = time.truncatingRemainder(dividingBy: 10)
+                        var envelope = 0.0
+                        for start in [0.15,0.65] {
+                            let age = phrase-start
+                            if age >= 0 && age < 0.25 { envelope += 0.18*min(1,age/0.015)*min(1,(0.25-age)/0.04) }
+                        }
+                        if (1.05...8.0).contains(phrase) {
+                            envelope += 0.12*min(1,(phrase-1.05)/0.12)*min(1,(8.0-phrase)/0.30)
+                        }
+                        let frequency = 220*pow(2,0.45*min(1,max(0,(phrase-1.05)/3)))
+                        vocalPhase += 2 * .pi*frequency/48_000
+                        let value = envelope*(sin(vocalPhase)+0.4*sin(2*vocalPhase)+0.18*sin(3*vocalPhase))
+                        var percussion = 0.0
+                        let drumAge = time.truncatingRemainder(dividingBy: 0.5)
+                        if drumAge < 0.10 {
+                            if Int(time/0.5)%2 == 0 { percussion += 0.22*sin(2 * .pi*60*drumAge)*exp(-drumAge/0.035) }
+                            else { percussion += 0.09*(sin(2 * .pi*2_300*drumAge)+sin(2 * .pi*6_400*drumAge))*exp(-drumAge/0.018) }
+                        }
+                        let hatAge = time.truncatingRemainder(dividingBy: 0.125)
+                        percussion += 0.025*sin(2 * .pi*8_000*hatAge)*exp(-hatAge/0.008)
+                        rhythm = analyzer.consume(Float(value))
+                        let beat = drums.consume(Float(percussion))
+                        rhythm.energy = max(rhythm.energy,beat.energy)
+                        rhythm.drumEnergy = beat.energy
+                        rhythm.beatCount = beat.beatCount; rhythm.beatAge = beat.beatAge
+                        rhythm.beatStrength = beat.beatStrength; rhythm.beatWeight = beat.beatWeight
+                        sample += 1
+                    }
+                    engine.update(dt: 1/60,rhythm: rhythm)
+                }
+                rig.apply(engine.pose,duration: 0)
                 let image = renderer.snapshot(atTime: 0,with: CGSize(width: 390,height: 450),antialiasingMode: .multisampling4X)
                 guard let cgImage = image.cgImage(forProposedRect: nil,context: nil,hints: nil) else { throw NSError(domain: "Miho.Artwork",code: 3) }
-                CGImageDestinationAddImage(destination,cgImage,[kCGImagePropertyGIFDictionary:[kCGImagePropertyGIFDelayTime:0.05]] as CFDictionary)
+                CGImageDestinationAddImage(destination,cgImage,[kCGImagePropertyGIFDictionary:[kCGImagePropertyGIFDelayTime:1.0/30]] as CFDictionary)
             }
         }
         guard CGImageDestinationFinalize(destination) else { throw NSError(domain: "Miho.Artwork",code: 4) }
@@ -46,14 +78,26 @@ public enum ArtworkExport {
             return renderer.snapshot(atTime: 0,with: size,antialiasingMode: .multisampling4X)
         }
         try save(render(DancePose()),to: directory.appendingPathComponent("miho-idle.png"))
-        try save(render(Choreographer.dance(move: .armWave,phase: 0.65,energy: 0.8)),to: directory.appendingPathComponent("miho-dancing.png"))
-        let tiles = DanceMove.allCases.map { render(Choreographer.dance(move: $0,phase: 0.65,energy: 0.8),size: CGSize(width: 390,height: 450)) }
-        let sheet = NSImage(size: NSSize(width: 1_170,height: 1_040),flipped: false) { rect in
+        let engine = Choreographer(seed: 42)
+        var cue = RhythmFrame(); cue.energy = 0.8; cue.vocalEnergy = 0.8
+        cue.vocalPresence = 0.9; cue.vocalConfidence = 0.9; cue.vocalPitch = 220; cue.vocalSustain = 0.9
+        var tiles: [NSImage] = []
+        for stage in 0..<4 {
+            for _ in 0..<60 {
+                cue.vocalPitch = 220*pow(2,Double(stage)*0.2)
+                if stage == 3 { cue.vocalPresence = 0; cue.vocalEnergy = 0 }
+                engine.update(dt: 1/60,rhythm: cue)
+            }
+            tiles.append(render(engine.pose,size: CGSize(width: 390,height: 450)))
+        }
+        try save(tiles[2],to: directory.appendingPathComponent("miho-dancing.png"))
+        let labels = ["起句","唱腔上扬","长音保持","收句放松"]
+        let sheet = NSImage(size: NSSize(width: 780,height: 1_040),flipped: false) { rect in
             NSColor(srgbRed: 0.97,green: 0.98,blue: 0.99,alpha: 1).setFill(); rect.fill()
             for (index,image) in tiles.enumerated() {
-                let x = CGFloat(index%3)*390, y = CGFloat(1-index/3)*520
+                let x = CGFloat(index%2)*390, y = CGFloat(1-index/2)*520
                 image.draw(in: NSRect(x: x,y: y+45,width: 390,height: 450))
-                let text = NSAttributedString(string: DanceMove.allCases[index].label,attributes: [.font:NSFont.systemFont(ofSize: 21,weight: .semibold),.foregroundColor:NSColor.darkGray])
+                let text = NSAttributedString(string: labels[index],attributes: [.font:NSFont.systemFont(ofSize: 21,weight: .semibold),.foregroundColor:NSColor.darkGray])
                 text.draw(at: NSPoint(x: x+(390-text.size().width)/2,y: y+20))
             }
             return true

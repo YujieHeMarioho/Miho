@@ -2,13 +2,21 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/toolchain.sh
+./scripts/prepare-audio-models.sh
 configuration="${CONFIGURATION:-release}"
 swift build -c "$configuration"
 bin_dir=$(swift build -c "$configuration" --show-bin-path)
 app="$PWD/dist/Miho.app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
+cp Vendor/onnxruntime/lib/libonnxruntime.1.26.0.dylib "$app/Contents/Frameworks/"
+ln -sf libonnxruntime.1.26.0.dylib "$app/Contents/Frameworks/libonnxruntime.1.dylib"
+cp Vendor/models/hop128.onnx "$app/Contents/Resources/"
+cp ThirdParty/*LICENSE.txt "$app/Contents/Resources/"
+cp Vendor/onnxruntime/ThirdPartyNotices.txt "$app/Contents/Resources/ONNXRuntime-ThirdPartyNotices.txt"
+codesign --force --sign - "$app/Contents/Frameworks/libonnxruntime.1.26.0.dylib"
 cp "$bin_dir/Miho" "$app/Contents/MacOS/Miho.new"
 mv "$app/Contents/MacOS/Miho.new" "$app/Contents/MacOS/Miho"
+install_name_tool -delete_rpath "$PWD/Vendor/onnxruntime/lib" "$app/Contents/MacOS/Miho"
 cat > "$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -19,8 +27,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>Miho</string>
 <key>CFBundleIconFile</key><string>Miho</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.3.0</string>
-<key>CFBundleVersion</key><string>5</string>
+<key>CFBundleShortVersionString</key><string>0.5.0</string>
+<key>CFBundleVersion</key><string>8</string>
 <key>LSMinimumSystemVersion</key><string>14.2</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>

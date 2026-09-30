@@ -43,7 +43,7 @@ struct CharacterView: NSViewRepresentable {
     }
     func updateNSView(_ view: SCNView, context: Context) {
         context.coordinator.rig.setAppearance(appearance)
-        context.coordinator.rig.apply(pose, duration: animated ? 1/30 : 0)
+        context.coordinator.rig.apply(pose, duration: animated ? 1/120 : 0)
         context.coordinator.rig.setInteractionRotation(rotation,duration: animated ? 1/60 : 0)
     }
     static func dismantleNSView(_ view: SCNView, coordinator: Coordinator) { view.isPlaying = false; view.scene = nil }

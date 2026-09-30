@@ -11,8 +11,9 @@ private final class FakeCapture: AudioCapturing {
     var disposed = false
     var gain = 0.0
     var failure: Error?
+    var snapshot = CaptureSnapshot()
     func setSensitivity(_ value: Double) { gain = value }
-    func latest() -> CaptureSnapshot { CaptureSnapshot() }
+    func latest() -> CaptureSnapshot { snapshot }
     func start(completion: @escaping (Error?) -> Void) { starts += 1; completion(failure) }
     func stop() { stops += 1 }
     func dispose() { disposed = true }
@@ -37,6 +38,37 @@ final class CaptureLifecycleTests: XCTestCase {
 
     private func makeModel(_ capture: FakeCapture) -> CompanionModel {
         CompanionModel(capture: capture, defaults: makeDefaults())
+    }
+    func testLivePreviewSharesAudioImpulseAndReconnectCanReuseBeatCounter() async {
+        let capture = FakeCapture(), defaults = makeDefaults()
+        let model = CompanionModel(capture: capture,defaults: defaults)
+        defer { model.shutdown() }
+        model.motionIntensity = 1.3
+        model.setEnabled(true)
+        capture.snapshot.generation = 1
+        capture.snapshot.rhythm.energy = 0.8
+        capture.snapshot.rhythm.beatCount = 1
+        capture.snapshot.rhythm.beatStrength = 1
+        capture.snapshot.rhythm.beatAge = 0
+        capture.snapshot.lastCallback = ProcessInfo.processInfo.systemUptime
+        let first = expectation(description: "live frame")
+        DispatchQueue.main.asyncAfter(deadline: .now()+0.10) { first.fulfill() }
+        await fulfillment(of: [first],timeout: 1)
+        XCTAssertEqual(model.animation.frame.gesture,.accent)
+        XCTAssertEqual(model.animation.frame.rhythm.beatCount,1)
+        XCTAssertGreaterThan(model.animation.frame.impact,0.3)
+        XCTAssertGreaterThan(model.animation.frame.pose.z,0.005)
+        let oldImpact = model.animation.frame.impact
+        // A new tap may deliver the same counter value as the previous tap.
+        capture.snapshot.generation = 2
+        capture.snapshot.lastCallback = ProcessInfo.processInfo.systemUptime
+        let second = expectation(description: "new capture onset")
+        DispatchQueue.main.asyncAfter(deadline: .now()+0.10) { second.fulfill() }
+        await fulfillment(of: [second],timeout: 1)
+        XCTAssertEqual(model.animation.frame.gesture,.accent)
+        XCTAssertGreaterThan(model.animation.frame.impact,oldImpact*0.8)
+        XCTAssertGreaterThan(model.animation.frame.pose.z,0.005)
+        XCTAssertEqual(defaults.double(forKey: "motionIntensity"),1.3)
     }
 
     func testPermissionFailureLeavesUsableModelAndCanRetry() {
