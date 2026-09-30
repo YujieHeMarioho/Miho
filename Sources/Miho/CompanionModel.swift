@@ -12,9 +12,16 @@ struct PetMotion {
     var pose = DancePose()
 }
 
+final class CharacterAnimation: ObservableObject {
+    @Published var pose = DancePose()
+}
+
 @available(macOS 14.2, *)
 final class CompanionModel: ObservableObject {
-    @Published var motion = PetMotion()
+    let animation = CharacterAnimation()
+    var motion = PetMotion() {
+        didSet { animation.pose = motion.pose }
+    }
     @Published var status = "准备好陪你听音乐"
     @Published var enabled = false
     @Published var mood: DanceMood = .dreamy

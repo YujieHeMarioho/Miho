@@ -3,11 +3,13 @@ import MihoDesktop
 
 if #available(macOS 14.2, *) {
     let app = NSApplication.shared
-    if let index = CommandLine.arguments.firstIndex(of: "--export-artifacts"),
+    let motionExport = CommandLine.arguments.contains("--export-motion")
+    if let index = CommandLine.arguments.firstIndex(of: motionExport ? "--export-motion" : "--export-artifacts"),
        CommandLine.arguments.indices.contains(index + 1) {
         do {
             try MainActor.assumeIsolated {
-                try ArtworkExport.write(to: URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true))
+                let url = URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: !motionExport)
+                if motionExport { try ArtworkExport.writeMotion(to: url) } else { try ArtworkExport.write(to: url) }
             }
             exit(0)
         } catch {

@@ -38,7 +38,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
     private func showWelcome() {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "你好，我是 Miho 迷糊 🌱"
+        alert.messageText = "你好，我是 Miho 迷糊 🎧"
         alert.informativeText = "放首歌，我就会跟着跳舞。\n\nMiho 会申请捕获电脑播放的声音，只在本机实时分析，不保存、不上传，也不使用麦克风。你可以随时从菜单栏暂停。\n\n拖动小团子可以换位置。"
         alert.addButton(withTitle: "开始听音乐")
         alert.addButton(withTitle: "先陪我待着")
@@ -56,7 +56,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         let menu = NSMenu()
         menu.autoenablesItems = false
         menu.delegate = self
-        let title = NSMenuItem(title: "Miho 迷糊 🌱", action: nil, keyEquivalent: "")
+        let title = NSMenuItem(title: "Miho 迷糊 🎧", action: nil, keyEquivalent: "")
         title.isEnabled = false
         menu.addItem(title)
         statusMenuItem = NSMenuItem(title: model.status, action: nil, keyEquivalent: "")
@@ -106,7 +106,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func showStudio() {
         if studioWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 650,height: 540),
+            let window = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 650,height: 620),
                                   styleMask: [.titled,.closable,.miniaturizable],backing: .buffered,defer: false)
             window.title = "Miho · 舞步预览"
             window.contentView = NSHostingView(rootView: DanceStudioView())
@@ -163,7 +163,7 @@ private struct InfoView: View {
     @ObservedObject var model: CompanionModel
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Miho 迷糊 🌱").font(.system(size: 27, weight: .semibold, design: .rounded))
+            Text("Miho 迷糊 🎧").font(.system(size: 27, weight: .semibold, design: .rounded))
             Text("Tencent Music Hackathon · 腾讯音乐黑客松").font(.system(size: 12)).foregroundStyle(.secondary)
             Text("一个陪你听音乐的 3D 小舞者。\n拖动它换位置，右键查看舞步和调整律动。")
                 .font(.system(size: 13))

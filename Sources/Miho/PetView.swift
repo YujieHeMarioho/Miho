@@ -4,15 +4,21 @@ import MihoCore
 
 @available(macOS 14.2, *)
 struct PetView: View {
+    static let desktopSize = CGSize(width: 220,height: 260)
     @ObservedObject var model: CompanionModel
     var body: some View {
-        CharacterView(pose: model.motion.pose)
-            .frame(width: 260, height: 300)
+        AnimatedCharacterView(animation: model.animation)
+            .frame(width: Self.desktopSize.width, height: Self.desktopSize.height)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Miho 迷糊，3D 桌面音乐精灵")
             .accessibilityValue(model.status)
             .help("拖动 Miho 换位置 · 右键调整律动与预览舞步")
     }
+}
+
+private struct AnimatedCharacterView: View {
+    @ObservedObject var animation: CharacterAnimation
+    var body: some View { CharacterView(pose: animation.pose) }
 }
 
 /// SwiftUI owns controls; SceneKit owns a persistent Metal scene and its joint animations.
