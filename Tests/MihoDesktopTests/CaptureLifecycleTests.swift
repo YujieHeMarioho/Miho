@@ -73,6 +73,22 @@ final class CaptureLifecycleTests: XCTestCase {
         XCTAssertEqual(defaults.double(forKey: "motionIntensity"),1.3)
     }
 
+    func testModePersistsWithoutRestartingCaptureOrResettingAppearance() {
+        let capture = FakeCapture(), defaults = makeDefaults()
+        let model = CompanionModel(capture: capture,defaults: defaults)
+        model.setEnabled(true)
+        let starts = capture.starts, look = model.appearance
+        model.danceMode = .music
+        XCTAssertEqual(capture.starts,starts)
+        XCTAssertEqual(model.animation.frame.mode,.music)
+        XCTAssertEqual(model.appearance,look)
+        XCTAssertEqual(defaults.string(forKey: "danceMode"),"music")
+        model.shutdown()
+        let restored = CompanionModel(capture: FakeCapture(),defaults: defaults)
+        XCTAssertEqual(restored.danceMode,.music)
+        restored.shutdown()
+    }
+
     func testPermissionFailureLeavesUsableModelAndCanRetry() {
         let capture = FakeCapture()
         capture.failure = CaptureError.coreAudio("创建系统音频捕获", -1)

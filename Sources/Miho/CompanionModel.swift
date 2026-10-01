@@ -18,6 +18,7 @@ final class CharacterAnimation: ObservableObject {
         var impact = 0.0
         var gesture: VocalGesture = .idle
         var soundField = SoundFieldFrame()
+        var mode: DanceMode = .singer
     }
     @Published var frame = Frame()
 }
@@ -34,6 +35,13 @@ final class CompanionModel: ObservableObject {
         didSet {
             choreographer.intensity = motionIntensity
             defaults.set(motionIntensity,forKey: "motionIntensity")
+        }
+    }
+    @Published var danceMode: DanceMode = .singer {
+        didSet {
+            choreographer.mode = danceMode
+            defaults.set(danceMode.rawValue,forKey: "danceMode")
+            publishFrame()
         }
     }
     @Published var appearance = CharacterAppearance() {
@@ -81,6 +89,8 @@ final class CompanionModel: ObservableObject {
     init(capture: AudioCapturing = SystemAudioCapture(), defaults: UserDefaults = .standard) {
         self.capture = capture
         self.defaults = defaults
+        danceMode = DanceMode(rawValue: defaults.string(forKey: "danceMode") ?? "") ?? .singer
+        choreographer.mode = danceMode
         appearance = CharacterAppearance.load(defaults.data(forKey: "characterAppearance"))
         publishFrame()
         autoReturnRotation = defaults.object(forKey: "rotationAutoReturn") as? Bool ?? false
@@ -133,7 +143,7 @@ final class CompanionModel: ObservableObject {
     }
     private func publishFrame() {
         animation.frame = .init(pose: motion.pose,rotation: dragRotation.rotation,appearance: appearance,
-                               rhythm: displayRhythm,impact: choreographer.impact,gesture: choreographer.gesture,soundField: soundField.frame)
+                               rhythm: displayRhythm,impact: choreographer.impact,gesture: choreographer.gesture,soundField: soundField.frame,mode: danceMode)
     }
 
     private func start() {
@@ -199,7 +209,7 @@ final class CompanionModel: ObservableObject {
         }
         displayRhythm = rhythm
         next.pose = choreographer.update(dt: dt, rhythm: rhythm, enabled: enabled && !sleeping)
-        soundField.update(rhythm: rhythm,drive: choreographer.soundDrive,enabled: enabled && !sleeping)
+        soundField.update(rhythm: rhythm,drive: choreographer.soundDrive,mode: danceMode,enabled: enabled && !sleeping)
         motion = next
         if enabled && energy > 0.01 && current.inputHostTime != 0 {
             let hostNow = AudioGetCurrentHostTime()

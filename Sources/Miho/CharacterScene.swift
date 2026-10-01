@@ -13,6 +13,8 @@ final class CharacterScene {
     private let leftEar = SCNNode(), rightEar = SCNNode()
     private let headphones = SCNNode(), shades = SCNNode(), eyes = SCNNode(), hat = SCNNode(), shadow = SCNNode()
     private var appearance: CharacterAppearance?
+    private let halo = AudioReactiveHalo()
+    private var soundField = SoundFieldFrame()
     private let blue = CharacterScene.material(0x05B3E4,roughness: 0.95)
     private let leather = CharacterScene.material(0x844526,roughness: 0.68)
     private let cushion = CharacterScene.material(0x63351F,roughness: 0.88)
@@ -225,6 +227,7 @@ final class CharacterScene {
         if old?.accessory != next.accessory { makeHat(next.accessory) }
         eyes.name = "eyes"; shades.name = "glasses"; hat.name = "headAccessory"
         appearance = next
+        halo.rebuild(character: dancer,parent: turntable)
     }
     private func makeShadow() {
         let image = NSImage(size: NSSize(width: 256,height: 256),flipped: false) { rect in
@@ -282,8 +285,11 @@ final class CharacterScene {
         shadow.position.x = CGFloat(p.x*0.75)
         shadow.scale = SCNVector3(max(0.6,1-p.y*0.65),max(0.6,1-p.y*0.65),1)
         shadow.opacity = CGFloat(max(0.3,1-p.y*1.4))
+        halo.synchronize()
+        halo.update(soundField,center: SCNVector3(p.x,1.02+p.y,p.z))
         SCNTransaction.commit()
     }
+    func setSoundField(_ frame: SoundFieldFrame) { soundField = frame }
     func setInteractionRotation(_ rotation: Rotation3, duration: Double) {
         SCNTransaction.begin(); SCNTransaction.animationDuration = duration
         SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .linear)

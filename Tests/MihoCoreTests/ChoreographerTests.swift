@@ -71,7 +71,7 @@ final class ChoreographerTests: XCTestCase {
         f.vocalAccentCount = 1; f.vocalAccentAge = 0; f.vocalAccentStrength = 0.9
         for _ in 0..<8 { e.update(dt: 1/60,rhythm: f); f.vocalAccentAge += 1/60 }
         XCTAssertGreaterThan(e.impact,0.3)
-        XCTAssertGreaterThan(e.pose.z,held.z+0.015)
+        XCTAssertGreaterThan(abs(e.pose.body.y-held.body.y),0.025)
         for _ in 0..<90 { e.update(dt: 1/60,rhythm: f); f.vocalAccentAge += 1/60 }
         XCTAssertEqual(e.pose.y,held.y,accuracy: 0.005)
         XCTAssertEqual(e.pose.body.y,held.body.y,accuracy: 0.005)

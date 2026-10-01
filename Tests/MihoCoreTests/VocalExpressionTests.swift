@@ -97,7 +97,7 @@ final class VocalExpressionTests: XCTestCase {
             if (i+1)%800 == 0 {
                 frame.beatCount = 0 // isolate the singing path from the drum path
                 engine.update(dt: 1/60,rhythm: frame)
-                if response == nil && engine.impact > 0.15 && engine.pose.z > 0.015 { response = time }
+                if response == nil && engine.impact > 0.15 && max(abs(engine.pose.body.x),abs(engine.pose.body.y)) > 0.03 { response = time }
             }
         }
         XCTAssertNotNil(detected); XCTAssertNotNil(response)

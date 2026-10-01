@@ -19,10 +19,7 @@ struct PetView: View {
 private struct AnimatedCharacterView: View {
     @ObservedObject var animation: CharacterAnimation
     var body: some View {
-        ZStack {
-            AudioReactiveField(frame: animation.frame.soundField,pose: animation.frame.pose,appearance: animation.frame.appearance)
-            CharacterView(pose: animation.frame.pose,rotation: animation.frame.rotation,appearance: animation.frame.appearance)
-        }
+        CharacterView(pose: animation.frame.pose,rotation: animation.frame.rotation,appearance: animation.frame.appearance,soundField: animation.frame.soundField)
     }
 }
 
@@ -31,6 +28,7 @@ struct CharacterView: NSViewRepresentable {
     var pose: DancePose
     var rotation = Rotation3()
     var appearance = CharacterAppearance()
+    var soundField = SoundFieldFrame()
     var animated = true
     final class Coordinator { let rig = CharacterScene() }
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -48,6 +46,7 @@ struct CharacterView: NSViewRepresentable {
     }
     func updateNSView(_ view: SCNView, context: Context) {
         context.coordinator.rig.setAppearance(appearance)
+        context.coordinator.rig.setSoundField(soundField)
         context.coordinator.rig.apply(pose, duration: animated ? 1/120 : 0)
         context.coordinator.rig.setInteractionRotation(rotation,duration: animated ? 1/60 : 0)
     }

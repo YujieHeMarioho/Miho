@@ -1,10 +1,53 @@
 import XCTest
 import SceneKit
+import Metal
 import MihoCore
 @testable import MihoDesktop
 
 @MainActor
 final class CharacterSceneTests: XCTestCase {
+    func testRenderedHaloHugsRealSilhouetteAndDifferentFrequencyBandsMakeDifferentWaves() throws {
+        let rig = CharacterScene(), renderer = SCNRenderer(device: MTLCreateSystemDefaultDevice(),options: nil)
+        renderer.scene = rig.scene; renderer.pointOfView = rig.camera
+        let width = 180, height = 210
+        func render(_ field: SoundFieldFrame) throws -> [UInt8] {
+            rig.setSoundField(field); rig.apply(DancePose(),duration: 0)
+            let image = renderer.snapshot(atTime: 0,with: CGSize(width: width,height: height),antialiasingMode: .multisampling4X)
+            let cg = try XCTUnwrap(image.cgImage(forProposedRect: nil,context: nil,hints: nil))
+            var pixels = [UInt8](repeating: 0,count: width*height*4)
+            pixels.withUnsafeMutableBytes { bytes in
+                let context = CGContext(data: bytes.baseAddress,width: width,height: height,bitsPerComponent: 8,bytesPerRow: width*4,
+                    space: CGColorSpaceCreateDeviceRGB(),bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)!
+                context.draw(cg,in: CGRect(x: 0,y: 0,width: width,height: height))
+            }
+            return pixels
+        }
+        let quiet = try render(SoundFieldFrame())
+        var low = SoundFieldFrame(); low.drive = 0.9; low.spectrum[1] = 0.9; low.bass = 0.8; low.transient = 0.8
+        var high = low; high.spectrum[1] = 0; high.spectrum[16] = 0.9; high.bass = 0; high.transient = 0
+        let bass = try render(low), treble = try render(high)
+        let changed = (0..<(width*height)).filter { abs(Int(bass[$0*4+3])-Int(treble[$0*4+3])) > 8 }
+        XCTAssertGreaterThan(changed.count,40,"Actual GPU output must distinguish low and high frequencies")
+        var distance = (0..<(width*height)).map { quiet[$0*4+3] > 240 ? 0 : 1000 }
+        for y in 0..<height { for x in 0..<width {
+            let i = y*width+x
+            if x > 0 { distance[i] = min(distance[i],distance[i-1]+1) }
+            if y > 0 { distance[i] = min(distance[i],distance[i-width]+1) }
+        }}
+        for y in (0..<height).reversed() { for x in (0..<width).reversed() {
+            let i = y*width+x
+            if x+1 < width { distance[i] = min(distance[i],distance[i+1]+1) }
+            if y+1 < height { distance[i] = min(distance[i],distance[i+width]+1) }
+        }}
+        let haloPixels = (0..<(width*height)).filter { quiet[$0*4+3] < 100 && Int(bass[$0*4+3])-Int(quiet[$0*4+3]) > 8 }
+        XCTAssertGreaterThan(haloPixels.count,40)
+        XCTAssertGreaterThan(haloPixels.filter { Int(bass[$0*4+2])-Int(bass[$0*4]) > 4 }.count,20,
+                             "Low-opacity glow must retain its blue/violet tint instead of clipping to white")
+        XCTAssertLessThan(haloPixels.map { distance[$0] }.max() ?? 1000,24,"Halo must remain attached to the actual mesh silhouette")
+        rig.setInteractionRotation(.init(0,.pi/2,0),duration: 0)
+        XCTAssertNotEqual(try render(low),bass,"Silhouette glow must rotate with real geometry")
+    }
+
     func testAudioGrowthScalesBodyAndHeadphonesTogetherWithoutFlattening() throws {
         let rig = CharacterScene()
         let headset = try XCTUnwrap(rig.scene.rootNode.childNode(withName: "headphones",recursively: true))

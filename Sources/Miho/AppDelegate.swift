@@ -10,6 +10,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
     private var pauseItem: NSMenuItem!
     private var visibilityItem: NSMenuItem!
     private var autoReturnItem: NSMenuItem!
+    private var singerModeItem: NSMenuItem!
+    private var musicModeItem: NSMenuItem!
     private var isVisible = true
     private var infoWindow: NSWindow?
     private var studioWindow: NSWindow?
@@ -32,10 +34,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
                 if elapsed > 60 { timer.invalidate(); return }
                 let f = self.model.animation.frame
                 let capture = self.model.captureDiagnostics
-                print(String(format: "motion t=%.2f mix=%.3f voice=%.3f presence=%.3f confidence=%.3f pitch=%.1f sustain=%.3f y=%.3f yaw=%.3f impact=%.3f inferenceMs=%.3f latencyMs=%.1f ready=%d inputAgeMs=%.1f analysisMs=%.1f buffer=%d generation=%llu bpm=%.1f pulse=%.3f phase=%.3f beatProb=%.3f nod=%.3f scale=%.3f drive=%.3f drum=%.3f spectrum=%.3f",
+                print(String(format: "motion t=%.2f mix=%.3f voice=%.3f presence=%.3f confidence=%.3f pitch=%.1f sustain=%.3f y=%.3f yaw=%.3f impact=%.3f inferenceMs=%.3f latencyMs=%.1f ready=%d inputAgeMs=%.1f analysisMs=%.1f buffer=%d generation=%llu bpm=%.1f pulse=%.3f phase=%.3f beatProb=%.3f nod=%.3f scale=%.3f drive=%.3f drum=%.3f spectrum=%.3f mode=%@",
                     elapsed,f.rhythm.energy,f.rhythm.vocalEnergy,f.rhythm.vocalPresence,f.rhythm.vocalConfidence,
                     f.rhythm.vocalPitch,f.rhythm.vocalSustain,f.pose.y,f.pose.body.y,f.impact,self.model.inferenceMs,
-                    self.model.worstCaptureToMotionMs,self.model.separationReady ? 1 : 0,capture.inputAgeMs,capture.analysisMs,capture.bufferFrames,capture.generation,f.rhythm.pulse.bpm,f.rhythm.pulse.confidence,f.rhythm.pulse.position,f.rhythm.pulse.probability+f.rhythm.pulse.downbeatProbability,f.pose.body.x,f.pose.scale,f.soundField.drive,f.rhythm.drumEnergy,f.soundField.vocalSpectrum.max() ?? 0))
+                    self.model.worstCaptureToMotionMs,self.model.separationReady ? 1 : 0,capture.inputAgeMs,capture.analysisMs,capture.bufferFrames,capture.generation,f.rhythm.pulse.bpm,f.rhythm.pulse.confidence,f.rhythm.pulse.position,f.rhythm.pulse.probability+f.rhythm.pulse.downbeatProbability,f.pose.body.x,f.pose.scale,f.soundField.drive,f.rhythm.drumEnergy,f.soundField.spectrum.max() ?? 0,self.model.danceMode.rawValue))
                 fflush(stdout)
             }
             RunLoop.main.add(trace,forMode: .common)
@@ -87,6 +89,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         menu.addItem(.separator())
         pauseItem = item("暂停律动", #selector(togglePause))
         menu.addItem(pauseItem)
+        singerModeItem = item("歌手模式",#selector(selectSingerMode))
+        musicModeItem = item("音乐模式",#selector(selectMusicMode))
+        menu.addItem(singerModeItem); menu.addItem(musicModeItem)
         visibilityItem = item("隐藏 Miho", #selector(toggleVisible))
         menu.addItem(visibilityItem)
         menu.addItem(item("回到正面", #selector(resetRotation)))
@@ -119,6 +124,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         pauseItem.title = model.enabled ? "暂停律动" : "开始律动"
         visibilityItem.title = isVisible ? "隐藏 Miho" : "显示 Miho"
         autoReturnItem.state = model.autoReturnRotation ? .on : .off
+        singerModeItem.state = model.danceMode == .singer ? .on : .off
+        musicModeItem.state = model.danceMode == .music ? .on : .off
     }
 
     public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -127,6 +134,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         return true
     }
 
+    @objc private func selectSingerMode() { model.danceMode = .singer }
+    @objc private func selectMusicMode() { model.danceMode = .music }
     @objc private func togglePause() { model.setEnabled(!model.enabled) }
     @objc private func toggleVisible() { isVisible.toggle(); companion.setVisible(isVisible) }
     @objc private func retry() { model.retry() }

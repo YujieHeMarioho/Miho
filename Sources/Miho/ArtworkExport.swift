@@ -20,6 +20,8 @@ public enum ArtworkExport {
         rig.scene.background.contents = NSColor(srgbRed: 0.97,green: 0.98,blue: 0.99,alpha: 1)
         let frames = 300
         let engine = Choreographer(seed: 42)
+        if CommandLine.arguments.contains("--music-mode") { engine.mode = .music }
+        let beatClock = engine.mode == .music ? try LearnedBeatAnalyzer() : nil
         let analyzer = RhythmAnalyzer()
         let drums = RhythmAnalyzer(analyzeVoice: false)
         let mixture = RhythmAnalyzer(analyzeVoice: false)
@@ -62,20 +64,25 @@ public enum ArtworkExport {
                         rhythm.vocalSpectrum = rhythm.spectrum
                         rhythm.drumSpectrum = beat.spectrum
                         rhythm.spectrum = combined.spectrum
-                        rhythm.energy = max(rhythm.energy,beat.energy)
+                        if let beatClock { rhythm.pulse = try beatClock.consume(Float(value+percussion)) }
+                        rhythm.energy = combined.energy
+                        rhythm.bass = combined.bass; rhythm.mid = combined.mid; rhythm.treble = combined.treble
                         rhythm.drumEnergy = beat.energy
                         rhythm.beatCount = beat.beatCount; rhythm.beatAge = beat.beatAge
                         rhythm.beatStrength = beat.beatStrength; rhythm.beatWeight = beat.beatWeight
                         sample += 1
                     }
                     engine.update(dt: 1/60,rhythm: rhythm)
-                    field.update(rhythm: rhythm,drive: engine.soundDrive)
+                    field.update(rhythm: rhythm,drive: engine.soundDrive,mode: engine.mode)
                 }
+                rig.setSoundField(field.frame)
                 rig.apply(engine.pose,duration: 0)
-                renderer.scene?.background.contents = NSColor.clear
+                renderer.scene?.background.contents = CommandLine.arguments.contains("--light-preview")
+                    ? NSColor(srgbRed: 0.97,green: 0.98,blue: 0.99,alpha: 1)
+                    : NSColor(srgbRed: 0.035,green: 0.06,blue: 0.15,alpha: 1)
                 let size = CGSize(width: 390,height: 450)
                 let character = renderer.snapshot(atTime: 0,with: size,antialiasingMode: .multisampling4X)
-                let image = try composite(character,field: field.frame,pose: engine.pose,size: size)
+                let image = character
                 if frameIndex == 145 {
                     try save(image,to: url.deletingPathExtension().appendingPathExtension("png"))
                 }
@@ -84,18 +91,6 @@ public enum ArtworkExport {
             }
         }
         guard CGImageDestinationFinalize(destination) else { throw NSError(domain: "Miho.Artwork",code: 4) }
-    }
-
-    @MainActor private static func composite(_ character: NSImage,field: SoundFieldFrame,pose: DancePose,size: CGSize) throws -> NSImage {
-        let background = ImageRenderer(content: AudioReactiveField(frame: field,pose: pose,appearance: CharacterAppearance()).frame(width: size.width,height: size.height))
-        background.scale = 1
-        guard let board = background.nsImage else { throw NSError(domain: "Miho.Artwork",code: 5) }
-        return NSImage(size: size,flipped: false) { rect in
-            NSColor(srgbRed: 0.035,green: 0.06,blue: 0.15,alpha: 1).setFill();rect.fill()
-            board.draw(in: rect)
-            character.draw(in: rect)
-            return true
-        }
     }
 
     @MainActor public static func write(to directory: URL) throws {

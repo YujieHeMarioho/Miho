@@ -10,6 +10,7 @@ public enum AudioFileProbe {
         let format = file.processingFormat, sampleRate = format.sampleRate
         let analyzer = try SeparatedAudioAnalyzer(sampleRate: sampleRate)
         let engine = Choreographer(seed: 42)
+        if CommandLine.arguments.contains("--music-mode") { engine.mode = .music }
         var field = SoundField()
         engine.intensity = 0.8
         let size = AVAudioFrameCount(sampleRate/60)
@@ -29,11 +30,11 @@ public enum AudioFileProbe {
             if let error = result.error { throw NSError(domain: "Miho.Probe",code: 1,userInfo: [NSLocalizedDescriptionKey:error]) }
             let dt = Double(buffer.frameLength)/sampleRate;time += dt;elapsed += dt
             let r = result.rhythm, p = engine.update(dt: dt,rhythm: r)
-            let visual = field.update(rhythm: r,drive: engine.soundDrive)
+            let visual = field.update(rhythm: r,drive: engine.soundDrive,mode: engine.mode)
             if r.pulse.confidence > 0.4 { locked += dt }
             if time >= logAt {
                 logAt = time+(CommandLine.arguments.contains("--dense-probe") ? 0 : 0.10)
-                print(String(format: "%.3f,%.2f,%.3f,%.4f,%.3f,%.4f,%.4f,%.4f,%.3f,%.3f,%.4f,%.3f,%.3f,%.3f,%.3f",time,r.pulse.bpm,r.pulse.confidence,r.pulse.position,r.pulse.probability+r.pulse.downbeatProbability,p.y,p.body.x,p.body.y,r.vocalEnergy,r.vocalSustain,p.scale,visual.drive,r.drumEnergy,visual.vocalSpectrum.max() ?? 0,r.vocalPresence))
+                print(String(format: "%.3f,%.2f,%.3f,%.4f,%.3f,%.4f,%.4f,%.4f,%.3f,%.3f,%.4f,%.3f,%.3f,%.3f,%.3f",time,r.pulse.bpm,r.pulse.confidence,r.pulse.position,r.pulse.probability+r.pulse.downbeatProbability,p.y,p.body.x,p.body.y,r.vocalEnergy,r.vocalSustain,p.scale,visual.drive,r.drumEnergy,visual.spectrum.max() ?? 0,r.vocalPresence))
             }
         }
         let seconds = ProcessInfo.processInfo.systemUptime-start
