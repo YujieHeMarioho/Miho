@@ -4,7 +4,7 @@ import MihoCore
 
 @available(macOS 14.2, *)
 struct PetView: View {
-    static let desktopSize = CGSize(width: 220,height: 260)
+    static let desktopSize = CGSize(width: 280,height: 300)
     @ObservedObject var model: CompanionModel
     var body: some View {
         AnimatedCharacterView(animation: model.animation)
@@ -18,7 +18,9 @@ struct PetView: View {
 
 private struct AnimatedCharacterView: View {
     @ObservedObject var animation: CharacterAnimation
-    var body: some View { CharacterView(pose: animation.frame.pose,rotation: animation.frame.rotation,appearance: animation.frame.appearance) }
+    var body: some View {
+        CharacterView(pose: animation.frame.pose,rotation: animation.frame.rotation,appearance: animation.frame.appearance,soundField: animation.frame.soundField)
+    }
 }
 
 /// SwiftUI owns controls; SceneKit owns a persistent Metal scene and its joint animations.
@@ -26,6 +28,7 @@ struct CharacterView: NSViewRepresentable {
     var pose: DancePose
     var rotation = Rotation3()
     var appearance = CharacterAppearance()
+    var soundField = SoundFieldFrame()
     var animated = true
     final class Coordinator { let rig = CharacterScene() }
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -43,6 +46,7 @@ struct CharacterView: NSViewRepresentable {
     }
     func updateNSView(_ view: SCNView, context: Context) {
         context.coordinator.rig.setAppearance(appearance)
+        context.coordinator.rig.setSoundField(soundField)
         context.coordinator.rig.apply(pose, duration: animated ? 1/120 : 0)
         context.coordinator.rig.setInteractionRotation(rotation,duration: animated ? 1/60 : 0)
     }

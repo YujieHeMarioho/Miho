@@ -31,6 +31,10 @@ public struct RhythmFrame: Equatable {
     public var vocalAccentCount: UInt64 = 0
     public var vocalAccentAge: Double = .infinity
     public var vocalAccentStrength: Double = 0
+    /// Absolute-level logarithmic FFT bands; quiet audio remains visibly quiet.
+    public var spectrum = [Double](repeating: 0,count: 24)
+    public var vocalSpectrum = [Double](repeating: 0,count: 24)
+    public var drumSpectrum = [Double](repeating: 0,count: 24)
     public var isActive: Bool = false
     public init() {}
 }
@@ -58,6 +62,8 @@ public final class RhythmAnalyzer {
     private var fftImaginary = [Float](repeating: 0,count: 256)
     private var previousPower = [Double](repeating: 0,count: 256)
     private var melodicShare = 0.0
+    private var spectrumPower = [Double](repeating: 0,count: 24)
+    private var spectrumBand = [Int](repeating: 0,count: 256)
     private let vocalAnalyzer: VocalExpressionAnalyzer?
 
     public init(sampleRate: Double = 48_000, analyzeVoice: Bool = true) {
@@ -66,13 +72,18 @@ public final class RhythmAnalyzer {
         vocalAnalyzer = analyzeVoice ? VocalExpressionAnalyzer(sampleRate: sampleRate) : nil
         fftSetup = vDSP_create_fftsetup(9,FFTRadix(kFFTRadix2))!
         vDSP_hann_window(&hann,512,Int32(vDSP_HANN_NORM))
+        let upper = max(80,min(20_000,sampleRate/2)), range = log(upper/40)
+        for bin in 1..<256 {
+            spectrumBand[bin] = min(23,max(0,Int(log(max(40,Double(bin)*sampleRate/512)/40)/range*24)))
+        }
         dcAlpha = 1-exp(-2 * .pi * 25/sampleRate)
         lowAlpha = 1-exp(-2 * .pi * 200/sampleRate)
         midAlpha = 1-exp(-2 * .pi * 2_500/sampleRate)
     }
     deinit { vDSP_destroy_fftsetup(fftSetup) }
 
-    private func spectralAttackWeight() -> Double {
+    private func spectralAttackWeight(sensitivity: Double,dt: Double) -> Double {
+        for band in 0..<24 { spectrumPower[band] = 0 }
         // Real FFT packing: even samples in realp, odd samples in imagp.
         // https://developer.apple.com/documentation/accelerate/vdsp_fft_zrip
         for i in 0..<256 {
@@ -94,6 +105,12 @@ public final class RhythmAnalyzer {
                     if (120...2_200).contains(frequency) { melodic += power }
                     allPower += power
                     previousPower[bin] = power
+                    spectrumPower[spectrumBand[bin]] += power
+                }
+                for band in 0..<24 {
+                    let target = min(1,log1p(sqrt(spectrumPower[band])/512*45*sensitivity)/log(11))
+                    let old = result.spectrum[band]
+                    result.spectrum[band] += (target-old)*(1-exp(-dt/(target > old ? 0.025 : 0.13)))
                 }
                 melodicShare = melodic/max(allPower,1e-12)
                 return min(1,sqrt(grounded/max(total,1e-12)))
@@ -133,7 +150,7 @@ public final class RhythmAnalyzer {
         let target = active ? min(1,pow(rms*5*gain,0.65)) : 0
         level += (target-level)*(1-exp(-dt/(target > level ? 0.025 : 0.14)))
 
-        let attackWeight = spectralAttackWeight()
+        let attackWeight = spectralAttackWeight(sensitivity: gain,dt: dt)
         var flux = 0.0, strongestRise = 0.0, hasBandAttack = false
         for band in 0..<3 {
             let rms = sqrt(bandSquares[band]/Double(windowSize))

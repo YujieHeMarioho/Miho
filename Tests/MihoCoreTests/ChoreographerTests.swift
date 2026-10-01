@@ -20,13 +20,14 @@ final class ChoreographerTests: XCTestCase {
         XCTAssertEqual(e.gesture,.holding)
         XCTAssertEqual(e.impact,0)
     }
-    func testDecrescendoDuringHeldNoteDoesNotSendBodyBackToRest() {
+    func testDecrescendoKeepsHeldDirectionButReducesMotionAmplitude() {
         let e = Choreographer(seed: 42); var f = vocal()
         for _ in 0..<240 { e.update(dt: 1/60,rhythm: f) }
         let height = e.pose.y, yaw = e.pose.body.y
         f.vocalEnergy = 0.1
         for _ in 0..<180 { e.update(dt: 1/60,rhythm: f) }
-        XCTAssertGreaterThan(e.pose.y,height*0.78)
+        XCTAssertLessThan(e.pose.y,height*0.25)
+        XCTAssertGreaterThan(e.pose.y,0.008)
         XCTAssertGreaterThan(e.pose.body.y*yaw,0)
         XCTAssertEqual(e.gesture,.holding)
     }
@@ -70,7 +71,7 @@ final class ChoreographerTests: XCTestCase {
         f.vocalAccentCount = 1; f.vocalAccentAge = 0; f.vocalAccentStrength = 0.9
         for _ in 0..<8 { e.update(dt: 1/60,rhythm: f); f.vocalAccentAge += 1/60 }
         XCTAssertGreaterThan(e.impact,0.3)
-        XCTAssertGreaterThan(e.pose.z,held.z+0.015)
+        XCTAssertGreaterThan(abs(e.pose.body.y-held.body.y),0.025)
         for _ in 0..<90 { e.update(dt: 1/60,rhythm: f); f.vocalAccentAge += 1/60 }
         XCTAssertEqual(e.pose.y,held.y,accuracy: 0.005)
         XCTAssertEqual(e.pose.body.y,held.body.y,accuracy: 0.005)

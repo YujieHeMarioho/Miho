@@ -6,12 +6,15 @@ import simd
 /// Reconstructed from the user's Miho reference: cyan plush, short ears, brown headphones,
 /// and dark trapezoid sunglasses. Geometry and accessories remain genuinely three-dimensional.
 final class CharacterScene {
+    static let cameraScale = 2.1
     let scene = SCNScene()
     let camera = SCNNode()
     private let root = SCNNode(), turntable = SCNNode(), dancer = SCNNode(), skin = SCNNode()
     private let leftEar = SCNNode(), rightEar = SCNNode()
     private let headphones = SCNNode(), shades = SCNNode(), eyes = SCNNode(), hat = SCNNode(), shadow = SCNNode()
     private var appearance: CharacterAppearance?
+    private let halo = AudioReactiveHalo()
+    private var soundField = SoundFieldFrame()
     private let blue = CharacterScene.material(0x05B3E4,roughness: 0.95)
     private let leather = CharacterScene.material(0x844526,roughness: 0.68)
     private let cushion = CharacterScene.material(0x63351F,roughness: 0.88)
@@ -224,6 +227,7 @@ final class CharacterScene {
         if old?.accessory != next.accessory { makeHat(next.accessory) }
         eyes.name = "eyes"; shades.name = "glasses"; hat.name = "headAccessory"
         appearance = next
+        halo.rebuild(character: dancer,parent: turntable)
     }
     private func makeShadow() {
         let image = NSImage(size: NSSize(width: 256,height: 256),flipped: false) { rect in
@@ -238,7 +242,9 @@ final class CharacterScene {
     }
     private func makeLighting() {
         camera.camera = SCNCamera(); camera.camera?.usesOrthographicProjection = true
-        camera.camera?.orthographicScale = 1.55
+        // Leave space for audio-driven growth and side motion without clipping
+        // the headphones at the desktop panel's portrait aspect ratio.
+        camera.camera?.orthographicScale = Self.cameraScale
         camera.camera?.zNear = 0.1; camera.camera?.zFar = 30
         camera.camera?.wantsHDR = true; camera.camera?.wantsExposureAdaptation = false
         camera.camera?.exposureOffset = -0.10
@@ -264,6 +270,8 @@ final class CharacterScene {
         SCNTransaction.begin(); SCNTransaction.animationDuration = duration
         SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .linear)
         root.position = SCNVector3(p.x,p.y,p.z)
+        let scale = p.scale.isFinite ? min(1.25,max(0.85,p.scale)) : 1
+        dancer.scale = SCNVector3(scale,scale,scale)
         dancer.eulerAngles = SCNVector3(p.body.x,p.body.y,p.body.z)
         skin.scale = SCNVector3(1/sqrt(p.squash),p.squash,1/sqrt(p.squash))
         leftEar.eulerAngles = SCNVector3(p.leftEar.x,p.leftEar.y,-0.13+p.leftEar.z)
@@ -277,8 +285,11 @@ final class CharacterScene {
         shadow.position.x = CGFloat(p.x*0.75)
         shadow.scale = SCNVector3(max(0.6,1-p.y*0.65),max(0.6,1-p.y*0.65),1)
         shadow.opacity = CGFloat(max(0.3,1-p.y*1.4))
+        halo.synchronize()
+        halo.update(soundField,center: SCNVector3(p.x,1.02+p.y,p.z))
         SCNTransaction.commit()
     }
+    func setSoundField(_ frame: SoundFieldFrame) { soundField = frame }
     func setInteractionRotation(_ rotation: Rotation3, duration: Double) {
         SCNTransaction.begin(); SCNTransaction.animationDuration = duration
         SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .linear)

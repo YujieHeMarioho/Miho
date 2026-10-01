@@ -4,7 +4,7 @@ import XCTest
 /// Irregular drum times over a sustained pad catch false synchronization that
 /// would pass a metronome-only test. The analyzer frames feed the continuous pose controller.
 final class BeatMotionIntegrationTests: XCTestCase {
-    func testMixedDrumsBuildReadableAccentsWithin150ms() {
+    func testMixedDrumsAreDetectedButCannotMoveTheVocalOnlyCharacter() {
         let hits = [0.45,0.97,1.43,1.95,2.39,2.93,3.47]
         do {
             let rate = 48_000.0
@@ -43,12 +43,12 @@ final class BeatMotionIntegrationTests: XCTestCase {
                 }
             }
             XCTAssertEqual(detected.count,hits.count,"Accents: \(detected)")
-            XCTAssertEqual(visible.count,hits.count,"Accents: \(visible)")
+            XCTAssertTrue(visible.isEmpty,"Drums must not animate the character: \(visible)")
+            XCTAssertEqual(engine.pose.y,0,accuracy: 0.0001)
+            XCTAssertEqual(engine.pose.head.x,0,accuracy: 0.0001)
             for hit in hits {
                 let onset = detected.filter { $0 >= hit }.min() ?? 100
-                let response = visible.filter { $0 >= hit }.min() ?? 100
                 XCTAssertLessThan(onset-hit,0.04,"mixed drum attack at \(hit)")
-                XCTAssertLessThan(response-hit,0.15,"rounded visible accent at \(hit)")
             }
         }
     }

@@ -4,6 +4,7 @@ import Metal
 import MihoCore
 import ImageIO
 import UniformTypeIdentifiers
+import SwiftUI
 
 /// Render the live 3D rig with the same materials, camera and poses, without audio capture.
 @available(macOS 14.2, *)
@@ -11,48 +12,6 @@ public enum ArtworkExport {
     @MainActor public static func writeMotion(to url: URL) throws {
         try writeVocalMotion(to: url)
     }
-    /// Uses the actual bundled BeatNet model on repository-owned synthesized
-    /// drums. This validates the complete pulse-to-render path, not song quality.
-    @MainActor private static func writeGrooveMotion(to url: URL) throws {
-        let rig = CharacterScene()
-        let renderer = SCNRenderer(device: MTLCreateSystemDefaultDevice(),options: nil)
-        renderer.scene = rig.scene;renderer.pointOfView = rig.camera
-        rig.scene.background.contents = NSColor(srgbRed: 0.97,green: 0.98,blue: 0.99,alpha: 1)
-        let frames = 360, analyzer = try LearnedBeatAnalyzer(), transient = RhythmAnalyzer(analyzeVoice: false)
-        let engine = Choreographer(seed: 42);engine.intensity = 0.8
-        var sample = 0, rhythm = RhythmFrame()
-        guard let destination = CGImageDestinationCreateWithURL(url as CFURL,UTType.gif.identifier as CFString,frames,nil) else { throw NSError(domain: "Miho.Artwork",code: 2) }
-        CGImageDestinationSetProperties(destination,[kCGImagePropertyGIFDictionary:[kCGImagePropertyGIFLoopCount:0]] as CFDictionary)
-        for _ in 0..<frames {
-            try autoreleasepool {
-                for _ in 0..<2 {
-                    for _ in 0..<735 {
-                        let t = Double(sample)/44_100
-                        let position = t*124/60, age = position.truncatingRemainder(dividingBy: 1)*60/124
-                        let kick = age < 0.18 ? 0.45*exp(-age*30)*sin(2*Double.pi*(55*age+70*(1-exp(-age*35))/35)) : 0
-                        let snareAge = (position+1).truncatingRemainder(dividingBy: 2)*60/124
-                        let noise = sin(Double(sample)*12.9898+78.233)*43_758.5453
-                        let n = noise-floor(noise)
-                        let snare = snareAge < 0.12 ? 0.26*(n*2-1)*exp(-snareAge*35) : 0
-                        let hatAge = (position*2).truncatingRemainder(dividingBy: 1)*30/124
-                        let hat = hatAge < 0.035 ? 0.045*(n*2-1)*exp(-hatAge*110) : 0
-                        let value = Float(kick+snare+hat)
-                        rhythm = transient.consume(value)
-                        rhythm.pulse = try analyzer.consume(value)
-                        rhythm.drumEnergy = rhythm.energy
-                        sample += 1
-                    }
-                    engine.update(dt: 1/60,rhythm: rhythm)
-                }
-                rig.apply(engine.pose,duration: 0)
-                let image = renderer.snapshot(atTime: 0,with: CGSize(width: 390,height: 450),antialiasingMode: .multisampling4X)
-                guard let cg = image.cgImage(forProposedRect: nil,context: nil,hints: nil) else { throw NSError(domain: "Miho.Artwork",code: 3) }
-                CGImageDestinationAddImage(destination,cg,[kCGImagePropertyGIFDictionary:[kCGImagePropertyGIFDelayTime:1.0/30]] as CFDictionary)
-            }
-        }
-        guard CGImageDestinationFinalize(destination) else { throw NSError(domain: "Miho.Artwork",code: 4) }
-    }
-
     @MainActor public static func writeVocalMotion(to url: URL) throws {
         let rig = CharacterScene()
         let renderer = SCNRenderer(device: MTLCreateSystemDefaultDevice(),options: nil)
@@ -61,14 +20,18 @@ public enum ArtworkExport {
         rig.scene.background.contents = NSColor(srgbRed: 0.97,green: 0.98,blue: 0.99,alpha: 1)
         let frames = 300
         let engine = Choreographer(seed: 42)
+        if CommandLine.arguments.contains("--music-mode") { engine.mode = .music }
+        let beatClock = engine.mode == .music ? try LearnedBeatAnalyzer() : nil
         let analyzer = RhythmAnalyzer()
         let drums = RhythmAnalyzer(analyzeVoice: false)
+        let mixture = RhythmAnalyzer(analyzeVoice: false)
+        var field = SoundField()
         var rhythm = RhythmFrame(), sample = 0, vocalPhase = 0.0
         guard let destination = CGImageDestinationCreateWithURL(url as CFURL,UTType.gif.identifier as CFString,frames,nil) else {
             throw NSError(domain: "Miho.Artwork",code: 2)
         }
         CGImageDestinationSetProperties(destination,[kCGImagePropertyGIFDictionary:[kCGImagePropertyGIFLoopCount:0]] as CFDictionary)
-        for _ in 0..<frames {
+        for frameIndex in 0..<frames {
             try autoreleasepool {
                 // Feed the real analyzer: two short voiced syllables, a held
                 // melodic rise/fall, kicks/snares and light hats per phrase.
@@ -78,10 +41,11 @@ public enum ArtworkExport {
                         var envelope = 0.0
                         for start in [0.15,0.65] {
                             let age = phrase-start
-                            if age >= 0 && age < 0.25 { envelope += 0.18*min(1,age/0.015)*min(1,(0.25-age)/0.04) }
+                            if age >= 0 && age < 0.25 { envelope += (start < 0.5 ? 0.05 : 0.25)*min(1,age/0.015)*min(1,(0.25-age)/0.04) }
                         }
                         if (1.05...8.0).contains(phrase) {
-                            envelope += 0.12*min(1,(phrase-1.05)/0.12)*min(1,(8.0-phrase)/0.30)
+                            let loudness = phrase < 3 ? 0.05 : phrase < 5.2 ? 0.24 : 0.055
+                            envelope += loudness*min(1,(phrase-1.05)/0.12)*min(1,(8.0-phrase)/0.30)
                         }
                         let frequency = 220*pow(2,0.45*min(1,max(0,(phrase-1.05)/3)))
                         vocalPhase += 2 * .pi*frequency/48_000
@@ -96,16 +60,32 @@ public enum ArtworkExport {
                         percussion += 0.025*sin(2 * .pi*8_000*hatAge)*exp(-hatAge/0.008)
                         rhythm = analyzer.consume(Float(value))
                         let beat = drums.consume(Float(percussion))
-                        rhythm.energy = max(rhythm.energy,beat.energy)
+                        let combined = mixture.consume(Float(value+percussion))
+                        rhythm.vocalSpectrum = rhythm.spectrum
+                        rhythm.drumSpectrum = beat.spectrum
+                        rhythm.spectrum = combined.spectrum
+                        if let beatClock { rhythm.pulse = try beatClock.consume(Float(value+percussion)) }
+                        rhythm.energy = combined.energy
+                        rhythm.bass = combined.bass; rhythm.mid = combined.mid; rhythm.treble = combined.treble
                         rhythm.drumEnergy = beat.energy
                         rhythm.beatCount = beat.beatCount; rhythm.beatAge = beat.beatAge
                         rhythm.beatStrength = beat.beatStrength; rhythm.beatWeight = beat.beatWeight
                         sample += 1
                     }
                     engine.update(dt: 1/60,rhythm: rhythm)
+                    field.update(rhythm: rhythm,drive: engine.soundDrive,mode: engine.mode)
                 }
+                rig.setSoundField(field.frame)
                 rig.apply(engine.pose,duration: 0)
-                let image = renderer.snapshot(atTime: 0,with: CGSize(width: 390,height: 450),antialiasingMode: .multisampling4X)
+                renderer.scene?.background.contents = CommandLine.arguments.contains("--light-preview")
+                    ? NSColor(srgbRed: 0.97,green: 0.98,blue: 0.99,alpha: 1)
+                    : NSColor(srgbRed: 0.035,green: 0.06,blue: 0.15,alpha: 1)
+                let size = CGSize(width: 390,height: 450)
+                let character = renderer.snapshot(atTime: 0,with: size,antialiasingMode: .multisampling4X)
+                let image = character
+                if frameIndex == 145 {
+                    try save(image,to: url.deletingPathExtension().appendingPathExtension("png"))
+                }
                 guard let cgImage = image.cgImage(forProposedRect: nil,context: nil,hints: nil) else { throw NSError(domain: "Miho.Artwork",code: 3) }
                 CGImageDestinationAddImage(destination,cgImage,[kCGImagePropertyGIFDictionary:[kCGImagePropertyGIFDelayTime:1.0/30]] as CFDictionary)
             }
