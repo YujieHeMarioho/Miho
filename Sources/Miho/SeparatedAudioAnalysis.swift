@@ -124,6 +124,8 @@ final class SeparatedAudioAnalyzer {
         mixFrame.vocalAccentCount = vocalFrame.vocalAccentCount
         mixFrame.vocalAccentAge = vocalFrame.vocalAccentAge+128/44_100.0
         mixFrame.vocalAccentStrength = vocalFrame.vocalAccentStrength
+        mixFrame.vocalSpectrum = vocalFrame.spectrum
+        mixFrame.drumSpectrum = drumFrame.spectrum
         mixFrame.pulse = pulse
         result.rhythm = mixFrame
     }

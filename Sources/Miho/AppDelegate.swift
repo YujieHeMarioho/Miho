@@ -32,10 +32,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
                 if elapsed > 60 { timer.invalidate(); return }
                 let f = self.model.animation.frame
                 let capture = self.model.captureDiagnostics
-                print(String(format: "motion t=%.2f mix=%.3f voice=%.3f presence=%.3f confidence=%.3f pitch=%.1f sustain=%.3f y=%.3f yaw=%.3f impact=%.3f inferenceMs=%.3f latencyMs=%.1f ready=%d inputAgeMs=%.1f analysisMs=%.1f buffer=%d generation=%llu bpm=%.1f pulse=%.3f phase=%.3f beatProb=%.3f nod=%.3f",
+                print(String(format: "motion t=%.2f mix=%.3f voice=%.3f presence=%.3f confidence=%.3f pitch=%.1f sustain=%.3f y=%.3f yaw=%.3f impact=%.3f inferenceMs=%.3f latencyMs=%.1f ready=%d inputAgeMs=%.1f analysisMs=%.1f buffer=%d generation=%llu bpm=%.1f pulse=%.3f phase=%.3f beatProb=%.3f nod=%.3f scale=%.3f drive=%.3f drum=%.3f spectrum=%.3f",
                     elapsed,f.rhythm.energy,f.rhythm.vocalEnergy,f.rhythm.vocalPresence,f.rhythm.vocalConfidence,
                     f.rhythm.vocalPitch,f.rhythm.vocalSustain,f.pose.y,f.pose.body.y,f.impact,self.model.inferenceMs,
-                    self.model.worstCaptureToMotionMs,self.model.separationReady ? 1 : 0,capture.inputAgeMs,capture.analysisMs,capture.bufferFrames,capture.generation,f.rhythm.pulse.bpm,f.rhythm.pulse.confidence,f.rhythm.pulse.position,f.rhythm.pulse.probability+f.rhythm.pulse.downbeatProbability,f.pose.body.x))
+                    self.model.worstCaptureToMotionMs,self.model.separationReady ? 1 : 0,capture.inputAgeMs,capture.analysisMs,capture.bufferFrames,capture.generation,f.rhythm.pulse.bpm,f.rhythm.pulse.confidence,f.rhythm.pulse.position,f.rhythm.pulse.probability+f.rhythm.pulse.downbeatProbability,f.pose.body.x,f.pose.scale,f.soundField.drive,f.rhythm.drumEnergy,f.soundField.spectrum.max() ?? 0))
                 fflush(stdout)
             }
             RunLoop.main.add(trace,forMode: .common)

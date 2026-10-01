@@ -4,6 +4,7 @@ import Metal
 import MihoCore
 import ImageIO
 import UniformTypeIdentifiers
+import SwiftUI
 
 /// Render the live 3D rig with the same materials, camera and poses, without audio capture.
 @available(macOS 14.2, *)
@@ -63,6 +64,8 @@ public enum ArtworkExport {
         let engine = Choreographer(seed: 42)
         let analyzer = RhythmAnalyzer()
         let drums = RhythmAnalyzer(analyzeVoice: false)
+        let mixture = RhythmAnalyzer(analyzeVoice: false)
+        var field = SoundField()
         var rhythm = RhythmFrame(), sample = 0, vocalPhase = 0.0
         guard let destination = CGImageDestinationCreateWithURL(url as CFURL,UTType.gif.identifier as CFString,frames,nil) else {
             throw NSError(domain: "Miho.Artwork",code: 2)
@@ -78,10 +81,11 @@ public enum ArtworkExport {
                         var envelope = 0.0
                         for start in [0.15,0.65] {
                             let age = phrase-start
-                            if age >= 0 && age < 0.25 { envelope += 0.18*min(1,age/0.015)*min(1,(0.25-age)/0.04) }
+                            if age >= 0 && age < 0.25 { envelope += (start < 0.5 ? 0.05 : 0.25)*min(1,age/0.015)*min(1,(0.25-age)/0.04) }
                         }
                         if (1.05...8.0).contains(phrase) {
-                            envelope += 0.12*min(1,(phrase-1.05)/0.12)*min(1,(8.0-phrase)/0.30)
+                            let loudness = phrase < 3 ? 0.05 : phrase < 5.2 ? 0.24 : 0.055
+                            envelope += loudness*min(1,(phrase-1.05)/0.12)*min(1,(8.0-phrase)/0.30)
                         }
                         let frequency = 220*pow(2,0.45*min(1,max(0,(phrase-1.05)/3)))
                         vocalPhase += 2 * .pi*frequency/48_000
@@ -96,6 +100,10 @@ public enum ArtworkExport {
                         percussion += 0.025*sin(2 * .pi*8_000*hatAge)*exp(-hatAge/0.008)
                         rhythm = analyzer.consume(Float(value))
                         let beat = drums.consume(Float(percussion))
+                        let combined = mixture.consume(Float(value+percussion))
+                        rhythm.vocalSpectrum = rhythm.spectrum
+                        rhythm.drumSpectrum = beat.spectrum
+                        rhythm.spectrum = combined.spectrum
                         rhythm.energy = max(rhythm.energy,beat.energy)
                         rhythm.drumEnergy = beat.energy
                         rhythm.beatCount = beat.beatCount; rhythm.beatAge = beat.beatAge
@@ -103,14 +111,30 @@ public enum ArtworkExport {
                         sample += 1
                     }
                     engine.update(dt: 1/60,rhythm: rhythm)
+                    field.update(dt: 1/60,rhythm: rhythm,drive: engine.soundDrive)
                 }
                 rig.apply(engine.pose,duration: 0)
-                let image = renderer.snapshot(atTime: 0,with: CGSize(width: 390,height: 450),antialiasingMode: .multisampling4X)
+                renderer.scene?.background.contents = NSColor.clear
+                let size = CGSize(width: 390,height: 450)
+                let character = renderer.snapshot(atTime: 0,with: size,antialiasingMode: .multisampling4X)
+                let image = try composite(character,field: field.frame,size: size)
                 guard let cgImage = image.cgImage(forProposedRect: nil,context: nil,hints: nil) else { throw NSError(domain: "Miho.Artwork",code: 3) }
                 CGImageDestinationAddImage(destination,cgImage,[kCGImagePropertyGIFDictionary:[kCGImagePropertyGIFDelayTime:1.0/30]] as CFDictionary)
             }
         }
         guard CGImageDestinationFinalize(destination) else { throw NSError(domain: "Miho.Artwork",code: 4) }
+    }
+
+    @MainActor private static func composite(_ character: NSImage,field: SoundFieldFrame,size: CGSize) throws -> NSImage {
+        let background = ImageRenderer(content: AudioReactiveField(frame: field).frame(width: size.width,height: size.height))
+        background.scale = 1
+        guard let board = background.nsImage else { throw NSError(domain: "Miho.Artwork",code: 5) }
+        return NSImage(size: size,flipped: false) { rect in
+            NSColor(srgbRed: 0.035,green: 0.06,blue: 0.15,alpha: 1).setFill();rect.fill()
+            board.draw(in: rect)
+            character.draw(in: rect)
+            return true
+        }
     }
 
     @MainActor public static func write(to directory: URL) throws {

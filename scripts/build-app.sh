@@ -6,7 +6,7 @@ source scripts/toolchain.sh
 configuration="${CONFIGURATION:-release}"
 swift build -c "$configuration"
 bin_dir=$(swift build -c "$configuration" --show-bin-path)
-app="$PWD/dist/Miho.app"
+app="${MIHO_APP_PATH:-$PWD/dist/Miho.app}"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
 cp Vendor/onnxruntime/lib/libonnxruntime.1.26.0.dylib "$app/Contents/Frameworks/"
 ln -sf libonnxruntime.1.26.0.dylib "$app/Contents/Frameworks/libonnxruntime.1.dylib"
@@ -29,8 +29,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>Miho</string>
 <key>CFBundleIconFile</key><string>Miho</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.7.0</string>
-<key>CFBundleVersion</key><string>10</string>
+<key>CFBundleShortVersionString</key><string>0.8.0</string>
+<key>CFBundleVersion</key><string>11</string>
 <key>LSMinimumSystemVersion</key><string>14.2</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>

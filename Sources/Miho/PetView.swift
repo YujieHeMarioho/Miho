@@ -18,7 +18,12 @@ struct PetView: View {
 
 private struct AnimatedCharacterView: View {
     @ObservedObject var animation: CharacterAnimation
-    var body: some View { CharacterView(pose: animation.frame.pose,rotation: animation.frame.rotation,appearance: animation.frame.appearance) }
+    var body: some View {
+        ZStack {
+            AudioReactiveField(frame: animation.frame.soundField).padding(8)
+            CharacterView(pose: animation.frame.pose,rotation: animation.frame.rotation,appearance: animation.frame.appearance)
+        }
+    }
 }
 
 /// SwiftUI owns controls; SceneKit owns a persistent Metal scene and its joint animations.

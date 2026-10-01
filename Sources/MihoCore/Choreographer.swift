@@ -25,7 +25,7 @@ public struct Rotation3: Equatable, Sendable {
     func mixed(with b: Self, by t: Double) -> Self { .init(x+(b.x-x)*t,y+(b.y-y)*t,z+(b.z-z)*t) }
 }
 public struct DancePose: Equatable, Sendable {
-    public var x = 0.0, y = 0.0, z = 0.0, squash = 1.0
+    public var x = 0.0, y = 0.0, z = 0.0, squash = 1.0, scale = 1.0
     public var body = Rotation3(), head = Rotation3()
     public var leftEar = Rotation3(), rightEar = Rotation3()
     public var accessoryBounce = 0.0
@@ -34,14 +34,14 @@ public struct DancePose: Equatable, Sendable {
         let t = amount.isFinite ? min(1,max(0,amount)) : 0
         func mix(_ a: Double, _ b: Double) -> Double { a+(b-a)*t }
         var p = Self()
-        p.x = mix(x,b.x); p.y = mix(y,b.y); p.z = mix(z,b.z); p.squash = mix(squash,b.squash)
+        p.x = mix(x,b.x); p.y = mix(y,b.y); p.z = mix(z,b.z); p.squash = mix(squash,b.squash); p.scale = mix(scale,b.scale)
         p.body = body.mixed(with: b.body,by: t); p.head = head.mixed(with: b.head,by: t)
         p.leftEar = leftEar.mixed(with: b.leftEar,by: t); p.rightEar = rightEar.mixed(with: b.rightEar,by: t)
         p.accessoryBounce = mix(accessoryBounce,b.accessoryBounce)
         return p
     }
     mutating func add(_ b: Self) {
-        x += b.x; y += b.y; z += b.z; squash += b.squash-1
+        x += b.x; y += b.y; z += b.z; squash += b.squash-1; scale += b.scale-1
         body = .init(body.x+b.body.x,body.y+b.body.y,body.z+b.body.z)
         head = .init(head.x+b.head.x,head.y+b.head.y,head.z+b.head.z)
         leftEar = .init(leftEar.x+b.leftEar.x,leftEar.y+b.leftEar.y,leftEar.z+b.leftEar.z)
@@ -52,16 +52,18 @@ public struct DancePose: Equatable, Sendable {
 
 /// Vocal-first motion: the separated singer's envelope, articulation and pitch
 /// own the pose through phrases and breaths. Sustained notes extend and hold;
-/// short syllables follow their energy. Beat motion is a quiet instrumental
-/// fallback and cannot reduce, turn or cycle an active vocal posture.
+/// short syllables follow their energy. Real drum accents add bounded force;
+/// a beat-clock cycle is only an instrumental fallback.
 public final class Choreographer {
     public private(set) var mood: DanceMood = .dreamy
     public private(set) var gesture: VocalGesture = .idle
     public private(set) var pose = DancePose()
     public private(set) var impact = 0.0
+    public private(set) var vocalDrive = 0.0
+    public private(set) var soundDrive = 0.0
     public var intensity = 1.0
     private var velocity = DancePose()
-    private var time = 0.0, phraseAge = 0.0, gap = 1.0, voice = 0.0, pitchOffset = 0.0, phrasePeak = 0.0
+    private var time = 0.0, phraseAge = 0.0, gap = 1.0, voice = 0.0, pitchOffset = 0.0
     private var pitchAnchor: Double?, phraseSide = 1.0, phraseIndex = 0
     private var groove = 0.0, groovePosition = 0.0, grooveInitialized = false, halfTimeBody = false
     private var emphasis = 0.0, emphasisTarget = 0.0, releaseAt = -1.0, lastHit = -10.0
@@ -69,7 +71,7 @@ public final class Choreographer {
     private let personality: Double
     public init(seed: UInt64 = UInt64.random(in: .min ... .max)) {
         personality = Double(seed % 1000)/1000 * 2 * .pi
-        velocity.squash = 0
+        velocity.squash = 0; velocity.scale = 0
     }
     public func resetInput() {
         lastBeat = 0; lastVocal = 0
@@ -90,17 +92,20 @@ public final class Choreographer {
         let power = intensity.isFinite ? min(1.5,max(0.5,intensity)) : 1
         if voiced {
             if gap > 0.24 {
-                phraseAge = 0; pitchAnchor = nil; pitchOffset = 0; phrasePeak = 0
+                phraseAge = 0; pitchAnchor = nil; pitchOffset = 0
                 phraseIndex += 1
                 // Once per actual phrase, never on a timer or each drum hit.
                 phraseSide = (phraseIndex + Int(personality)) % 2 == 0 ? 1 : -1
             }
-            gap = 0; phraseAge += dt; phrasePeak = max(phrasePeak,vocalEnergy)
+            gap = 0; phraseAge += dt
         } else { gap += dt }
         let desiredVoice: Double
-        if voiced { desiredVoice = held > 0.45 ? max(vocalEnergy,phrasePeak*0.80) : vocalEnergy }
+        // Loudness owns amplitude even during a long note. Sustain preserves
+        // the shape/direction, never an obsolete volume peak.
+        if voiced { desiredVoice = vocalEnergy }
         else { desiredVoice = gap < 0.18 ? voice : 0 }
-        voice += (desiredVoice-voice)*(1-exp(-dt/(desiredVoice > voice ? 0.045 : 0.18)))
+        voice += (desiredVoice-voice)*(1-exp(-dt/(desiredVoice > voice ? 0.018 : 0.085)))
+        vocalDrive = min(1,pow(max(0,voice)/0.70,1.2))
         if voiced && unit(r.vocalConfidence) > 0.45 && r.vocalPitch.isFinite && (80...900).contains(r.vocalPitch) {
             let pitch = log2(r.vocalPitch)
             if pitchAnchor == nil { pitchAnchor = pitch }
@@ -134,7 +139,8 @@ public final class Choreographer {
             lastBeat = r.beatCount
             if enabled && r.beatAge.isFinite && r.beatAge < 0.15 && r.beatAge >= 0 && time-r.beatAge-lastHit > 0.22 {
                 // Separated drums: weak subdivisions do not shake a held vocal.
-                hit = vocalOwnsMotion ? 0 : unit(r.beatStrength)*unit(r.beatWeight)
+                let drumShare = vocalOwnsMotion ? 0.30*(voiced ? 1-held*0.88 : 0.25) : 1
+                hit = unit(r.beatStrength)*unit(r.beatWeight)*drumShare
                 // Once a pulse is established, accents colour the groove rather
                 // than launching a new impulse at every detected drum onset.
                 hit *= 1-groove*0.85
@@ -150,13 +156,14 @@ public final class Choreographer {
                 hit = max(hit,unit(r.vocalAccentStrength)*(1+matchingDrum*0.08))
             }
         }
-        if hit > 0.18 && energy > 0.005 {
+        if hit > (vocalOwnsMotion ? 0.025 : 0.18) && energy > 0.005 {
             emphasisTarget = max(emphasisTarget,hit); releaseAt = time+0.045; lastHit = time
         }
         if time > releaseAt || !enabled { emphasisTarget *= exp(-dt/0.16) }
         emphasis += (emphasisTarget-emphasis)*(1-exp(-dt/(emphasisTarget > emphasis ? 0.025 : 0.09)))
         impact = emphasis*power
-        let a = voice*power
+        let a = vocalDrive*power
+        soundDrive = min(1,vocalDrive+emphasis*(vocalOwnsMotion ? 0.18 : 0.55))
         let syllable = a*(1-min(1,held/0.60))
         var target = DancePose()
         // No periodic idle motion while audio is active or a phrase is held.
@@ -216,6 +223,9 @@ public final class Choreographer {
         target.head.x += impact*0.15
         target.squash -= impact*0.025
         target.accessoryBounce += impact*0.01
+        // Grow the complete character, including accessories, on vocal energy.
+        // Unlike squash this preserves its round three-dimensional silhouette.
+        target.scale = min(1.22,1+a*0.15+impact*0.035)
         target.y = min(0.38,max(0,target.y)); target.x = min(0.2,max(-0.2,target.x))
         mood = groove > 0.35 || impact > 0.20 ? .lively : voice > 0.03 ? .groovy : .dreamy
         if !vocalOwnsMotion && groove > 0.10 { gesture = .bouncing }
@@ -244,6 +254,7 @@ public final class Choreographer {
         step(&pose.y,&velocity.y,target.y,maxSpeed: 0.9)
         step(&pose.z,&velocity.z,target.z)
         step(&pose.squash,&velocity.squash,target.squash,omega: 26,maxSpeed: 0.45,maxAcceleration: 4)
+        step(&pose.scale,&velocity.scale,target.scale,omega: 28,maxSpeed: 1.4,maxAcceleration: 14)
         step(&pose.body.x,&velocity.body.x,target.body.x,omega: 20,maxSpeed: 2,maxAcceleration: 12)
         step(&pose.body.y,&velocity.body.y,target.body.y,omega: 18,maxSpeed: 2.8,maxAcceleration: 14)
         step(&pose.body.z,&velocity.body.z,target.body.z,omega: 20,maxSpeed: 2,maxAcceleration: 12)

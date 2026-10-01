@@ -20,13 +20,14 @@ final class ChoreographerTests: XCTestCase {
         XCTAssertEqual(e.gesture,.holding)
         XCTAssertEqual(e.impact,0)
     }
-    func testDecrescendoDuringHeldNoteDoesNotSendBodyBackToRest() {
+    func testDecrescendoKeepsHeldDirectionButReducesMotionAmplitude() {
         let e = Choreographer(seed: 42); var f = vocal()
         for _ in 0..<240 { e.update(dt: 1/60,rhythm: f) }
         let height = e.pose.y, yaw = e.pose.body.y
         f.vocalEnergy = 0.1
         for _ in 0..<180 { e.update(dt: 1/60,rhythm: f) }
-        XCTAssertGreaterThan(e.pose.y,height*0.78)
+        XCTAssertLessThan(e.pose.y,height*0.25)
+        XCTAssertGreaterThan(e.pose.y,0.008)
         XCTAssertGreaterThan(e.pose.body.y*yaw,0)
         XCTAssertEqual(e.gesture,.holding)
     }

@@ -238,7 +238,9 @@ final class CharacterScene {
     }
     private func makeLighting() {
         camera.camera = SCNCamera(); camera.camera?.usesOrthographicProjection = true
-        camera.camera?.orthographicScale = 1.55
+        // Leave space for audio-driven growth and side motion without clipping
+        // the headphones at the desktop panel's portrait aspect ratio.
+        camera.camera?.orthographicScale = 1.75
         camera.camera?.zNear = 0.1; camera.camera?.zFar = 30
         camera.camera?.wantsHDR = true; camera.camera?.wantsExposureAdaptation = false
         camera.camera?.exposureOffset = -0.10
@@ -264,6 +266,8 @@ final class CharacterScene {
         SCNTransaction.begin(); SCNTransaction.animationDuration = duration
         SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .linear)
         root.position = SCNVector3(p.x,p.y,p.z)
+        let scale = p.scale.isFinite ? min(1.25,max(0.85,p.scale)) : 1
+        dancer.scale = SCNVector3(scale,scale,scale)
         dancer.eulerAngles = SCNVector3(p.body.x,p.body.y,p.body.z)
         skin.scale = SCNVector3(1/sqrt(p.squash),p.squash,1/sqrt(p.squash))
         leftEar.eulerAngles = SCNVector3(p.leftEar.x,p.leftEar.y,-0.13+p.leftEar.z)

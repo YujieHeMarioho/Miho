@@ -5,6 +5,18 @@ import MihoCore
 
 @MainActor
 final class CharacterSceneTests: XCTestCase {
+    func testAudioGrowthScalesBodyAndHeadphonesTogetherWithoutFlattening() throws {
+        let rig = CharacterScene()
+        let headset = try XCTUnwrap(rig.scene.rootNode.childNode(withName: "headphones",recursively: true))
+        let body = try XCTUnwrap(rig.scene.rootNode.childNode(withName: "bodySurface",recursively: true))
+        let distance = Double(headset.convertVector(SCNVector3(1,0,0),to: rig.scene.rootNode).x)
+        var pose = DancePose();pose.scale = 1.18
+        rig.apply(pose,duration: 0)
+        XCTAssertEqual(Double(headset.convertVector(SCNVector3(1,0,0),to: rig.scene.rootNode).x),distance*1.18,accuracy: 0.001)
+        let x = body.convertVector(SCNVector3(1,0,0),to: rig.scene.rootNode)
+        let z = body.convertVector(SCNVector3(0,0,1),to: rig.scene.rootNode)
+        XCTAssertEqual(x.x,z.z,accuracy: 0.001)
+    }
     func testColorEditsReachFlattenedHeadphonesAndReuseBodyGeometry() throws {
         let rig = CharacterScene()
         let originalBody = try XCTUnwrap(rig.scene.rootNode.childNode(withName: "bodySurface",recursively: true)?.geometry)

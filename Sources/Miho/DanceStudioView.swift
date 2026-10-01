@@ -11,7 +11,7 @@ struct DanceStudioView: View {
             VStack(alignment: .leading,spacing: 12) {
                 Text("MIHO / LIVE VOICE").font(.system(size: 10,weight: .bold,design: .monospaced)).tracking(2).foregroundStyle(accent)
                 Text(model.appearance.displayName).font(.system(size: 30,weight: .bold,design: .rounded))
-                Text("跟着歌手的声音，舒展和摆动。").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("声音大，动作大；声音轻，动作轻。").font(.system(size: 12)).foregroundStyle(.secondary)
                 LiveDancePreview(animation: model.animation)
                 Text(model.status).font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false,vertical: true)
@@ -22,8 +22,8 @@ struct DanceStudioView: View {
                 Label(!model.enabled ? "律动已暂停" : model.separationReady ? "正在本机跟随人声" : "音频分析未连接",systemImage: "waveform")
                     .font(.system(size: 11)).foregroundStyle(accent)
                 VStack(alignment: .leading,spacing: 16) {
-                    Label("短句起落，跟着声音摆动",systemImage: "music.note")
-                    Label("长音舒展，延音保持姿态",systemImage: "arrow.left.and.right")
+                    Label("人声变强，放大身体与弹跳",systemImage: "music.note")
+                    Label("人声变轻，动作随之收小",systemImage: "arrow.left.and.right")
                     Label("唱腔上扬，随收句放松",systemImage: "arrow.up.right")
                     Label("人声重音加力，鼓点轻轻补充",systemImage: "bolt")
                 }.font(.system(size: 12)).padding(.vertical,16)
@@ -33,7 +33,7 @@ struct DanceStudioView: View {
                     Text(String(format: "%.1f×",model.motionIntensity)).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Slider(value: $model.motionIntensity,in: 0.5...1.5,step: 0.1).accessibilityLabel("动作幅度")
-                Text("人声决定主要动作，延音保持舒展。唱句和换气期间不让鼓点带跑；无人声时，伴奏才轻轻摇动。")
+                Text("人声带动主要幅度，鼓点适度加力。长音保留舒展方向，轻重仍跟声音走。青色流线显示人声，粉色流线显示鼓声。")
                     .font(.system(size: 11)).foregroundStyle(.secondary).lineSpacing(4)
                     .fixedSize(horizontal: false,vertical: true)
                 Button(model.enabled ? "暂停律动" : "开始律动") { model.setEnabled(!model.enabled) }
@@ -50,7 +50,10 @@ private struct LiveDancePreview: View {
     var body: some View {
         let frame = animation.frame
         VStack(spacing: 12) {
-            CharacterView(pose: frame.pose,appearance: frame.appearance).frame(width: 320,height: 335)
+            ZStack {
+                AudioReactiveField(frame: frame.soundField)
+                CharacterView(pose: frame.pose,appearance: frame.appearance)
+            }.frame(width: 320,height: 335)
             Text(frame.gesture.label).font(.system(size: 13,weight: .semibold)).foregroundStyle(accent)
             HStack(spacing: 12) {
                 VStack(alignment: .leading,spacing: 5) {
