@@ -2,27 +2,16 @@ import XCTest
 @testable import MihoCore
 
 final class GrooveMotionTests: XCTestCase {
-    func testInstrumentalFallbackNodFollowsTrackedBeatAtSlowAndFastTempi() {
+    func testInstrumentalAtAnyTempoStaysAtRestLikeSilence() {
         for bpm in [88.0,124,174] {
-            let engine = Choreographer(seed: 42)
-            var f = RhythmFrame();f.energy = 0.8;f.drumEnergy = 0.7
-            f.pulse.bpm = bpm;f.pulse.confidence = 0.9
-            var values: [(Double,Double)] = []
+            let engine = Choreographer(seed: 42), silence = Choreographer(seed: 42)
+            var f = RhythmFrame(); f.energy = 0.8; f.drumEnergy = 0.7
+            f.pulse.bpm = bpm; f.pulse.confidence = 0.9
             for i in 0..<720 {
-                let t = Double(i+1)/60
-                f.pulse.position = t*bpm/60
-                let p = engine.update(dt: 1/60,rhythm: f)
-                values.append((t,p.body.x))
+                f.pulse.position = Double(i+1)/60*bpm/60
+                XCTAssertEqual(engine.update(dt: 1/60,rhythm: f),silence.update(dt: 1/60,rhythm: RhythmFrame()))
+                XCTAssertEqual(engine.impact,0)
             }
-            var peaks = 0, errors: [Double] = []
-            for i in 240..<values.count-1 {
-                if values[i].1 > values[i-1].1 && values[i].1 >= values[i+1].1 {
-                    let t = values[i].0, period = 60/bpm
-                    errors.append(abs(t/period-round(t/period))*period);peaks += 1
-                }
-            }
-            XCTAssertGreaterThan(peaks,Int(7*bpm/60)-2)
-            XCTAssertLessThan(errors.max() ?? 1,0.10)
         }
     }
     func testPhaseCorrectionsAndRapidRapAccentsDoNotProduceJerkyBodySpeed() {

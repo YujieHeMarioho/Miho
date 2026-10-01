@@ -4,7 +4,7 @@ import MihoCore
 
 @available(macOS 14.2, *)
 struct PetView: View {
-    static let desktopSize = CGSize(width: 220,height: 260)
+    static let desktopSize = CGSize(width: 280,height: 300)
     @ObservedObject var model: CompanionModel
     var body: some View {
         AnimatedCharacterView(animation: model.animation)
@@ -20,7 +20,7 @@ private struct AnimatedCharacterView: View {
     @ObservedObject var animation: CharacterAnimation
     var body: some View {
         ZStack {
-            AudioReactiveField(frame: animation.frame.soundField).padding(8)
+            AudioReactiveField(frame: animation.frame.soundField,pose: animation.frame.pose,appearance: animation.frame.appearance)
             CharacterView(pose: animation.frame.pose,rotation: animation.frame.rotation,appearance: animation.frame.appearance)
         }
     }

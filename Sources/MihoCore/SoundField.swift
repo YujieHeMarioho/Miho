@@ -1,36 +1,22 @@
 import Foundation
 
-/// Audio-derived graphics only: no clock-generated waves or random bars.
+/// Only separated vocal data reaches the character's surrounding sound wave.
 public struct SoundFieldFrame: Equatable, Sendable {
-    public var spectrum = [Double](repeating: 0,count: 24)
     public var vocalSpectrum = [Double](repeating: 0,count: 24)
-    public var drumSpectrum = [Double](repeating: 0,count: 24)
-    public var vocals = [Double](repeating: 0,count: 96)
-    public var drums = [Double](repeating: 0,count: 96)
-    public var voice = 0.0, percussion = 0.0, drive = 0.0
+    public var voice = 0.0, drive = 0.0
     public init() {}
 }
 
 public struct SoundField {
     public private(set) var frame = SoundFieldFrame()
-    private var elapsed = 0.0
     public init() {}
-    @discardableResult public mutating func update(dt: Double,rhythm: RhythmFrame,drive: Double,enabled: Bool = true) -> SoundFieldFrame {
+    @discardableResult public mutating func update(rhythm: RhythmFrame,drive: Double,enabled: Bool = true) -> SoundFieldFrame {
         func unit(_ v: Double) -> Double { v.isFinite ? min(1,max(0,v)) : 0 }
-        func bands(_ v: [Double]) -> [Double] {
-            (0..<24).map { enabled && $0 < v.count ? unit(v[$0]) : 0 }
-        }
-        frame.spectrum = bands(rhythm.spectrum)
-        frame.vocalSpectrum = bands(rhythm.vocalSpectrum)
-        frame.drumSpectrum = bands(rhythm.drumSpectrum)
-        frame.voice = enabled ? unit(rhythm.vocalEnergy)*unit(rhythm.vocalPresence) : 0
-        frame.percussion = enabled ? unit(rhythm.drumEnergy) : 0
+        let audible = enabled && unit(rhythm.vocalPresence) > 0.18 && unit(rhythm.vocalEnergy) > 0.025
+        frame.voice = audible ? unit(rhythm.vocalEnergy) : 0
         frame.drive = enabled ? unit(drive) : 0
-        elapsed += dt.isFinite ? min(0.1,max(0,dt)) : 0
-        while elapsed >= 1.0/30 {
-            elapsed -= 1.0/30
-            frame.vocals.removeFirst(); frame.vocals.append(frame.voice)
-            frame.drums.removeFirst(); frame.drums.append(frame.percussion)
+        frame.vocalSpectrum = (0..<24).map {
+            audible && $0 < rhythm.vocalSpectrum.count ? unit(rhythm.vocalSpectrum[$0])*min(1,frame.drive*4) : 0
         }
         return frame
     }

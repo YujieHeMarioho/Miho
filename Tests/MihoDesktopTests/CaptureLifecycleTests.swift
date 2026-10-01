@@ -39,7 +39,7 @@ final class CaptureLifecycleTests: XCTestCase {
     private func makeModel(_ capture: FakeCapture) -> CompanionModel {
         CompanionModel(capture: capture, defaults: makeDefaults())
     }
-    func testLivePreviewSharesAudioImpulseAndReconnectCanReuseBeatCounter() async {
+    func testLivePreviewSharesVocalImpulseAndReconnectCanReuseVocalCounter() async {
         let capture = FakeCapture(), defaults = makeDefaults()
         let model = CompanionModel(capture: capture,defaults: defaults)
         defer { model.shutdown() }
@@ -47,15 +47,17 @@ final class CaptureLifecycleTests: XCTestCase {
         model.setEnabled(true)
         capture.snapshot.generation = 1
         capture.snapshot.rhythm.energy = 0.8
-        capture.snapshot.rhythm.beatCount = 1
-        capture.snapshot.rhythm.beatStrength = 1
-        capture.snapshot.rhythm.beatAge = 0
+        capture.snapshot.rhythm.vocalPresence = 1
+        capture.snapshot.rhythm.vocalEnergy = 0.7
+        capture.snapshot.rhythm.vocalAccentCount = 1
+        capture.snapshot.rhythm.vocalAccentStrength = 1
+        capture.snapshot.rhythm.vocalAccentAge = 0
         capture.snapshot.lastCallback = ProcessInfo.processInfo.systemUptime
         let first = expectation(description: "live frame")
         DispatchQueue.main.asyncAfter(deadline: .now()+0.10) { first.fulfill() }
         await fulfillment(of: [first],timeout: 1)
         XCTAssertEqual(model.animation.frame.gesture,.accent)
-        XCTAssertEqual(model.animation.frame.rhythm.beatCount,1)
+        XCTAssertEqual(model.animation.frame.rhythm.vocalAccentCount,1)
         XCTAssertGreaterThan(model.animation.frame.impact,0.3)
         XCTAssertGreaterThan(model.animation.frame.pose.z,0.005)
         let oldImpact = model.animation.frame.impact

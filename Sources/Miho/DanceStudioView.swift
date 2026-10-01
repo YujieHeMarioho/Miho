@@ -18,14 +18,14 @@ struct DanceStudioView: View {
             }.padding(28).frame(width: 350)
                 .background(LinearGradient(colors: [Color(red: 0.91,green: 0.97,blue: 0.99),Color(red: 0.98,green: 0.98,blue: 0.96)],startPoint: .topLeading,endPoint: .bottomTrailing))
             VStack(alignment: .leading,spacing: 16) {
-                Text("人声领舞").font(.system(size: 20,weight: .bold,design: .rounded))
+                Text("只跟人声").font(.system(size: 20,weight: .bold,design: .rounded))
                 Label(!model.enabled ? "律动已暂停" : model.separationReady ? "正在本机跟随人声" : "音频分析未连接",systemImage: "waveform")
                     .font(.system(size: 11)).foregroundStyle(accent)
                 VStack(alignment: .leading,spacing: 16) {
                     Label("人声变强，放大身体与弹跳",systemImage: "music.note")
                     Label("人声变轻，动作随之收小",systemImage: "arrow.left.and.right")
                     Label("唱腔上扬，随收句放松",systemImage: "arrow.up.right")
-                    Label("人声重音加力，鼓点轻轻补充",systemImage: "bolt")
+                    Label("每次人声加力，动作随之加强",systemImage: "bolt")
                 }.font(.system(size: 12)).padding(.vertical,16)
                 HStack {
                     Text("动作幅度").font(.system(size: 12,weight: .semibold))
@@ -33,7 +33,7 @@ struct DanceStudioView: View {
                     Text(String(format: "%.1f×",model.motionIntensity)).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Slider(value: $model.motionIntensity,in: 0.5...1.5,step: 0.1).accessibilityLabel("动作幅度")
-                Text("人声带动主要幅度，鼓点适度加力。长音保留舒展方向，轻重仍跟声音走。青色流线显示人声，粉色流线显示鼓声。")
+                Text("角色与周围的浅色音波只跟人声。人声越强，抬得越高；变轻就收小。长音持续舒展，伴奏期间安静陪伴。")
                     .font(.system(size: 11)).foregroundStyle(.secondary).lineSpacing(4)
                     .fixedSize(horizontal: false,vertical: true)
                 Button(model.enabled ? "暂停律动" : "开始律动") { model.setEnabled(!model.enabled) }
@@ -51,15 +51,14 @@ private struct LiveDancePreview: View {
         let frame = animation.frame
         VStack(spacing: 12) {
             ZStack {
-                AudioReactiveField(frame: frame.soundField)
+                AudioReactiveField(frame: frame.soundField,pose: frame.pose,appearance: frame.appearance)
                 CharacterView(pose: frame.pose,appearance: frame.appearance)
             }.frame(width: 320,height: 335)
             Text(frame.gesture.label).font(.system(size: 13,weight: .semibold)).foregroundStyle(accent)
             HStack(spacing: 12) {
                 VStack(alignment: .leading,spacing: 5) {
                     meter("人声",value: frame.rhythm.vocalEnergy*frame.rhythm.vocalPresence)
-                    meter("延音",value: frame.rhythm.vocalSustain)
-                    meter("鼓点",value: frame.rhythm.drumEnergy)
+                    meter("音波",value: frame.soundField.drive)
                 }
                 Spacer()
                 VStack(spacing: 4) {

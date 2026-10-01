@@ -6,6 +6,7 @@ import simd
 /// Reconstructed from the user's Miho reference: cyan plush, short ears, brown headphones,
 /// and dark trapezoid sunglasses. Geometry and accessories remain genuinely three-dimensional.
 final class CharacterScene {
+    static let cameraScale = 2.1
     let scene = SCNScene()
     let camera = SCNNode()
     private let root = SCNNode(), turntable = SCNNode(), dancer = SCNNode(), skin = SCNNode()
@@ -240,7 +241,7 @@ final class CharacterScene {
         camera.camera = SCNCamera(); camera.camera?.usesOrthographicProjection = true
         // Leave space for audio-driven growth and side motion without clipping
         // the headphones at the desktop panel's portrait aspect ratio.
-        camera.camera?.orthographicScale = 1.75
+        camera.camera?.orthographicScale = Self.cameraScale
         camera.camera?.zNear = 0.1; camera.camera?.zFar = 30
         camera.camera?.wantsHDR = true; camera.camera?.wantsExposureAdaptation = false
         camera.camera?.exposureOffset = -0.10

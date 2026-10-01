@@ -199,7 +199,7 @@ final class CompanionModel: ObservableObject {
         }
         displayRhythm = rhythm
         next.pose = choreographer.update(dt: dt, rhythm: rhythm, enabled: enabled && !sleeping)
-        soundField.update(dt: dt,rhythm: rhythm,drive: choreographer.soundDrive,enabled: enabled && !sleeping)
+        soundField.update(rhythm: rhythm,drive: choreographer.soundDrive,enabled: enabled && !sleeping)
         motion = next
         if enabled && energy > 0.01 && current.inputHostTime != 0 {
             let hostNow = AudioGetCurrentHostTime()

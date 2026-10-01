@@ -17,10 +17,7 @@ final class VocalPriorityTests: XCTestCase {
             loud.pulse.position = Double(i)/60*174/60+0.5
             loud.beatCount = UInt64(i/8+1);loud.beatAge = Double(i%8)/60;loud.beatStrength = 1
             let actual = mix.update(dt: 1/60,rhythm: loud)
-            XCTAssertEqual(actual.body.y,expected.body.y,accuracy: 0.0001)
-            XCTAssertGreaterThanOrEqual(actual.y,expected.y-0.001)
-            XCTAssertLessThan(actual.y-expected.y,0.012)
-            XCTAssertLessThan(actual.scale-expected.scale,0.010)
+            XCTAssertEqual(actual,expected)
         }
         XCTAssertGreaterThan(mix.pose.y,0.16)
         f.vocalPitch = 330;f.vocalPitchMotion = 0.2
@@ -38,8 +35,7 @@ final class VocalPriorityTests: XCTestCase {
             withDrums.pulse.position = Double(i)/60*174/60;withDrums.beatCount = UInt64(i/5+1)
             withDrums.beatAge = Double(i%5)/60;withDrums.beatStrength = 1
             let q = b.update(dt: 1/60,rhythm: withDrums)
-            XCTAssertEqual(q.body.y,p.body.y,accuracy: 0.0001)
-            XCTAssertLessThan(abs(q.y-p.y),0.01)
+            XCTAssertEqual(q,p)
         }
     }
     func testHumanAccentsRetainTheirStrengthWithOrWithoutTheBeatModel() {
