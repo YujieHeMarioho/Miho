@@ -2,3 +2,6 @@
 dist/
 .DS_Store
 .swiftpm/
+Vendor/
+
+__pycache__/

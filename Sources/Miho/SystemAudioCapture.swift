@@ -3,6 +3,13 @@ import Foundation
 import MihoCore
 
 struct CaptureSnapshot {
+    var inputAgeMs = 0.0
+    var analysisMs = 0.0
+    var bufferFrames = 0
+    var separationReady = false
+    var separationError: String?
+    var inferenceMs = 0.0
+    var generation: UInt64 = 0
     var rhythm = RhythmFrame()
     var lastCallback: TimeInterval = 0
     var inputHostTime: UInt64 = 0
@@ -34,13 +41,14 @@ enum CaptureError: LocalizedError {
 }
 
 /// Lifecycle runs on a serial worker (Core Audio can wait for authorization).
-/// The IO queue owns the analyzer; a small
+/// A bounded analysis worker separates vocals/drums; a small
 /// locked mailbox carries only scalar results to the UI, never recorded audio.
 @available(macOS 14.2, *)
 final class SystemAudioCapture: AudioCapturing {
     private var tapID: AudioObjectID = 0
     private var deviceID: AudioObjectID = 0
     private var ioProc: AudioDeviceIOProcID?
+    private var pipeline: AudioAnalysisPipeline?
     private let controlQueue = DispatchQueue(label: "app.miho.capture-control", qos: .userInitiated)
     private var revision: UInt64 = 0
     private let ioQueue = DispatchQueue(label: "app.miho.audio", qos: .userInteractive)
@@ -77,7 +85,7 @@ final class SystemAudioCapture: AudioCapturing {
             self.lock.lock(); let isCurrent = self.revision == request; self.lock.unlock()
             guard isCurrent else { return }
             var failure: Error?
-            do { try self.startOnWorker() } catch { failure = error }
+            do { try self.startOnWorker(generation: request) } catch { failure = error }
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.lock.lock(); let isCurrent = self.revision == request; self.lock.unlock()
@@ -86,10 +94,10 @@ final class SystemAudioCapture: AudioCapturing {
         }
     }
 
-    private func startOnWorker() throws {
+    private func startOnWorker(generation: UInt64) throws {
         stopOnWorker()
         do {
-            let description = CATapDescription(monoGlobalTapButExcludeProcesses: [])
+            let description = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
             description.name = "Miho System Audio"
             description.uuid = UUID()
             description.isPrivate = true
@@ -102,7 +110,7 @@ final class SystemAudioCapture: AudioCapturing {
             try check(AudioObjectGetPropertyData(tapID, &formatAddress, 0, nil, &formatSize, &format), "读取音频格式")
             guard format.mFormatID == kAudioFormatLinearPCM,
                   format.mFormatFlags & kAudioFormatFlagIsFloat != 0,
-                  format.mBitsPerChannel == 32, format.mChannelsPerFrame == 1,
+                  format.mBitsPerChannel == 32, format.mChannelsPerFrame == 2,
                   format.mSampleRate > 0 else { throw CaptureError.unsupportedFormat }
 
             let aggregate: [String: Any] = [
@@ -118,32 +126,52 @@ final class SystemAudioCapture: AudioCapturing {
                 ]]
             ]
             try check(AudioHardwareCreateAggregateDevice(aggregate as CFDictionary, &deviceID), "创建音频分析设备")
-            let analyzer = RhythmAnalyzer(sampleRate: format.mSampleRate)
-            try check(AudioDeviceCreateIOProcIDWithBlock(&ioProc, deviceID, ioQueue) {
-                [weak self] _, input, inputTime, _, _ in
+            let pipeline = try AudioAnalysisPipeline(sampleRate: format.mSampleRate) { [weak self] block,result in
+                guard let self else { return }
+                self.lock.lock(); defer { self.lock.unlock() }
+                guard self.revision == generation else { return }
+                self.snapshot.rhythm = result.rhythm
+                self.snapshot.generation = (generation << 32) | block.epoch
+                self.snapshot.lastCallback = block.deliveredAt
+                self.snapshot.inputHostTime = block.hostTime
+                self.snapshot.separationReady = result.error == nil
+                self.snapshot.separationError = result.error
+                self.snapshot.inferenceMs = result.inferenceMs
+                self.snapshot.analysisMs = (ProcessInfo.processInfo.systemUptime-block.deliveredAt)*1000
+            }
+            self.pipeline = pipeline
+            try check(AudioDeviceCreateIOProcIDWithBlock(&ioProc,deviceID,ioQueue) {
+                [weak self] _,input,inputTime,_,_ in
                 guard let self else { return }
                 let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
-                guard let buffer = buffers.first, let data = buffer.mData else { return }
-                let count = Int(buffer.mDataByteSize) / MemoryLayout<Float>.size
-                let values = data.assumingMemoryBound(to: Float.self)
-                self.lock.lock(); let sensitivity = self.gain; self.lock.unlock()
-                var frame = RhythmFrame()
-                var audible = false
-                for index in 0..<count {
-                    let sample = values[index]
-                    audible = audible || abs(sample) > 0.0006
-                    frame = analyzer.consume(sample, sensitivity: sensitivity)
-                }
+                guard let first = buffers.first, let firstData = first.mData else { return }
+                let planar = first.mNumberChannels == 1 && buffers.count >= 2
+                let count = Int(first.mDataByteSize)/MemoryLayout<Float>.size/(planar ? 1 : 2)
                 guard count > 0 else { return }
+                let l = firstData.assumingMemoryBound(to: Float.self)
+                let r = planar ? buffers[1].mData?.assumingMemoryBound(to: Float.self) : nil
+                if planar && (r == nil || buffers[1].mDataByteSize < first.mDataByteSize) { return }
+                var stereo = [Float](repeating: 0,count: count*2)
+                var audible = false
+                for i in 0..<count {
+                    stereo[i*2] = planar ? l[i] : l[i*2]
+                    stereo[i*2+1] = planar ? r![i] : l[i*2+1]
+                    audible = audible || abs(stereo[i*2]) > 0.0006 || abs(stereo[i*2+1]) > 0.0006
+                }
                 self.lock.lock()
-                self.snapshot.rhythm = frame
-                self.snapshot.lastCallback = ProcessInfo.processInfo.systemUptime
-                self.snapshot.inputHostTime = inputTime.pointee.mFlags.contains(.hostTimeValid)
-                    ? inputTime.pointee.mHostTime : 0
+                let sensitivity = self.gain
+                self.snapshot.bufferFrames = count
+                let nowHost = AudioGetCurrentHostTime(), inputHost = inputTime.pointee.mHostTime
+                if inputTime.pointee.mFlags.contains(.hostTimeValid) && nowHost >= inputHost {
+                    self.snapshot.inputAgeMs = Double(AudioConvertHostTimeToNanos(nowHost-inputHost))/1_000_000
+                }
                 self.snapshot.callbackCount &+= 1
                 if audible { self.snapshot.audibleCallbackCount &+= 1 }
                 self.lock.unlock()
-            }, "连接音频分析回调")
+                pipeline.enqueue(.init(stereo: stereo,sensitivity: sensitivity,
+                    deliveredAt: ProcessInfo.processInfo.systemUptime,
+                    hostTime: inputTime.pointee.mFlags.contains(.hostTimeValid) ? inputTime.pointee.mHostTime : 0))
+            },"连接音频分析回调")
             try check(AudioDeviceStart(deviceID, ioProc), "开始系统音频捕获")
         } catch {
             stopOnWorker()
@@ -157,6 +185,7 @@ final class SystemAudioCapture: AudioCapturing {
     }
 
     private func stopOnWorker() {
+        pipeline?.cancel(); pipeline = nil
         if let ioProc {
             AudioDeviceStop(deviceID, ioProc)
             AudioDeviceDestroyIOProcID(deviceID, ioProc)
