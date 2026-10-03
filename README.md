@@ -3,9 +3,10 @@
 一个会随电脑声音动起来的 **3D macOS 桌面精灵**，为 **Tencent Music Hackathon（腾讯音乐黑客松）**制作。
 
 <p>
-  <img src="docs/images/miho-idle.png" width="230" alt="蓝色球形 Miho，戴着棕色耳机和黑色墨镜" />
-  <img src="docs/images/miho-dancing.png" width="230" alt="Miho 随长音舒展" />
+  <img src="docs/images/miho-audio-halo.png" width="300" alt="v0.10.0 默认蓝色咪虎：棕色耳机、黑色墨镜，频谱柔光贴合角色轮廓" />
 </p>
+
+上图和下方动画统一展示 v0.10.0 的默认蓝色咪虎与贴边频谱柔光。角色可以自定义；已有的紫色或其他搭配会继续保存在各台 Mac 本机，仓库预览不会覆盖你的外观。
 
 v0.10.0 提供**歌手模式／音乐模式**，声音驱动多轴律动，柔光音波直接贴着 3D 角色轮廓。
 
@@ -24,8 +25,6 @@ v0.10.0 提供**歌手模式／音乐模式**，声音驱动多轴律动，柔�
   <img src="docs/images/miho-dance-preview.gif" width="300" alt="歌手模式：合成唱句驱动 Miho 点头、转肩与舒展" />
   <img src="docs/images/miho-music-preview.gif" width="300" alt="音乐模式：合成伴奏驱动 Miho 点头、弹动与换重心" />
 </p>
-
-<img src="docs/images/miho-audio-halo.png" width="300" alt="Miho 随人声放大，频谱柔光紧贴身体、耳朵和耳机轮廓" />
 
 左侧是歌手模式，右侧是音乐模式。GIF 使用本项目的**大小声短音节、变化音量的长音与独立鼓声**，经过同一特征分析、姿态引擎、贴边音波和 3D 场景绘制；音乐模式还经过实际 BeatNet。该离线演示直接提供各声部，绕过人声分离模型；它不代表真实歌曲的分离质量或跟随准确率，也没有现场播放器音轨。
 
