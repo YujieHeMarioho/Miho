@@ -11,9 +11,22 @@ if [[ ! -f Vendor/models/hop128.onnx ]] || [[ "$(shasum -a 256 Vendor/models/hop
     download_verified 'https://media.githubusercontent.com/media/sweetspotsoundsystem/stemgen-rt/61df8f4aa1555ef110308d01ea92b54ace770979/model/model.onnx' "$model_sha" Vendor/models/hop128.onnx
 fi
 if [[ ! -f Vendor/onnxruntime/lib/libonnxruntime.1.26.0.dylib || ! -f Vendor/onnxruntime/include/onnxruntime_cxx_api.h || ! -f Vendor/onnxruntime/ThirdPartyNotices.txt ]]; then
-    [[ "$(uname -m)" == arm64 ]] || { printf 'Current audio runtime requires Apple Silicon.\n' >&2; exit 1; }
-    curl --fail --location --retry 2 --output dist/onnxruntime-sdk.tgz 'https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-osx-arm64-1.26.0.tgz'
-    [[ "$(shasum -a 256 dist/onnxruntime-sdk.tgz | cut -d' ' -f1)" == "$sdk_sha" ]]
-    tar -xzf dist/onnxruntime-sdk.tgz -C Vendor/onnxruntime --strip-components=2
+    download_verified 'https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-osx-arm64-1.26.0.tgz' "$sdk_sha" dist/onnxruntime-sdk.tgz
+    staging=$(mktemp -d Vendor/onnxruntime-stage.XXXXXX)
+    trap 'rm -rf "$staging"' EXIT
+    tar -xzf dist/onnxruntime-sdk.tgz -C "$staging" --strip-components=2
+    for file in lib/libonnxruntime.1.26.0.dylib include/onnxruntime_cxx_api.h ThirdPartyNotices.txt; do
+        [[ -s "$staging/$file" ]] || { printf 'Incomplete SDK archive: missing %s\n' "$file" >&2; exit 1; }
+    done
+    # Keep the previous cache recoverable until the new SDK has been validated.
+    backup=$(mktemp -d Vendor/onnxruntime-previous.XXXXXX)
+    rmdir "$backup"
+    mv Vendor/onnxruntime "$backup"
+    if ! mv "$staging" Vendor/onnxruntime; then
+        mv "$backup" Vendor/onnxruntime
+        exit 1
+    fi
+    rm -rf "$backup"
+    trap - EXIT
 fi
 printf 'Local audio model and native runtime ready.\n'
