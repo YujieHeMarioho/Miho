@@ -2,11 +2,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/toolchain.sh
+source scripts/app-path.sh
+app=$(resolve_app_path)
 ./scripts/prepare-audio-models.sh
 configuration="${CONFIGURATION:-release}"
 swift build -c "$configuration"
 bin_dir=$(swift build -c "$configuration" --show-bin-path)
-app="${MIHO_APP_PATH:-$PWD/dist/Miho.app}"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
 cp Vendor/onnxruntime/lib/libonnxruntime.1.26.0.dylib "$app/Contents/Frameworks/"
 ln -sf libonnxruntime.1.26.0.dylib "$app/Contents/Frameworks/libonnxruntime.1.dylib"
