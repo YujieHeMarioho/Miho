@@ -92,6 +92,10 @@ MIHO_APP_PATH="$PWD/dist/staged/Miho.app" ./scripts/build-app.sh
 CONFIGURATION=debug ./scripts/build-app.sh
 ```
 
+环境有疑问时先运行 `./scripts/doctor.sh`。它只检查本机工具和依赖文件，不下载、不构建、不修改系统设置；文件存在不等于校验和或运行验证通过。缺少完整 Xcode 时，测试脚本会在下载模型之前给出 XCTest 安装提示。
+
+开发脚本的离线回归不依赖 Xcode，可运行 `python3 scripts/test-developer-tools.py`。覆盖下载中断、校验失败、完整／损坏 SDK、测试前置检查和带空格的输出路径；它不替代音频、场景或 XCTest 验证。模型下载有连接与总时限，校验失败保留旧模型；SDK 在临时目录解压和验证后再替换缓存。自定义 `MIHO_APP_PATH` 必须以 `.app` 结尾，相对路径以仓库根目录为基准。
+
 先退出旧 Miho 再启动新构建。诊断只输出标量，不保存音频：
 
 ```bash
