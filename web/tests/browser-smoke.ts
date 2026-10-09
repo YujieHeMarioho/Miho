@@ -12,6 +12,23 @@ try {
  assert.equal(await page.locator('[data-color="#aa83ec"]').getAttribute('aria-pressed'),'true');
  await page.locator('#demo').click();
  await page.waitForFunction(()=>document.querySelector('#toggle')?.textContent==='暂停');
+ for(const character of ['classic','bean','bunny','crown']) {
+  await page.locator('#character').selectOption(character);
+  assert.equal(await page.locator('#toggle').textContent(),'暂停');
+  await page.screenshot({path:`/tmp/miho-character-${character}.png`,fullPage:true});
+ }
+ for(const mode of ['singer','music','singer','music']) {
+  await page.locator(`[data-mode="${mode}"]`).click();
+  assert.equal(await page.locator(`[data-mode="${mode}"]`).getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('#toggle').textContent(),'暂停');
+ }
+ assert.ok((await page.locator('#mode-help').textContent())?.includes('低频'));
+ for(const song of ['night','pulse','voice','little']) {
+  await page.locator('#song').selectOption(song);
+  await page.waitForFunction(()=>document.querySelector('#toggle')?.textContent==='暂停');
+  assert.equal(await page.locator('#song').inputValue(),song);
+ }
+ await page.waitForFunction(()=>Array.from(document.querySelectorAll('#bars i')).some(bar=>parseFloat((bar as HTMLElement).style.height)>3));
  await page.locator('#toggle').click();
  assert.equal(await page.locator('#toggle').textContent(),'播放');
  await page.locator('#toggle').click();
@@ -36,5 +53,5 @@ try {
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await page.goto('about:blank');
  assert.deepEqual(errors,[]);
- console.log('Browser smoke PASS: WebGL, colors, playback/pause/replay, two file swaps, audio end, mobile layout, teardown; no page errors.');
+ console.log('Browser smoke PASS: WebGL, four characters, two modes, four live song switches, active spectrum, colors, playback/pause/replay, two file swaps, audio end, mobile layout, teardown; no page errors.');
 } finally {await browser.close()}

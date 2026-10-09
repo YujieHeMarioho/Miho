@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {AudioEngine,demoWave} from '../src/audio';
+import {AudioEngine,demoWave,tracks} from '../src/audio';
 function fixture(){
  const listeners=new Map<string,()=>void>();let plays=0,pauses=0,creates=0;const revoked:string[]=[];
  const media={src:'',volume:1,currentTime:0,duration:12,play:async()=>{plays++},pause:()=>{pauses++},load:()=>{},addEventListener:(type:string,listener:()=>void)=>listeners.set(type,listener),removeEventListener:(type:string)=>listeners.delete(type)};
@@ -16,3 +16,6 @@ test('rejected playback leaves paused and can retry',async()=>{const f=fixture()
 test('dispose is idempotent and cancels pending resume',async()=>{const f=fixture();f.engine.select(new Blob());let resolve!:()=>void;f.resume(()=>new Promise<void>(r=>resolve=r));const playing=f.engine.play();f.engine.dispose();f.engine.dispose();resolve();await playing;assert.deepEqual(f.revoked,['blob:1']);assert.equal(f.listeners.size,0);assert.equal(f.media.src,'');assert.equal(f.plays,0)});
 test('resume is requested for each play',async()=>{const f=fixture();let count=0;f.resume(async()=>{count++});f.engine.select(new Blob());await f.engine.play();f.engine.pause();await f.engine.play();assert.equal(count,2)});
 test('demo is a valid 12-second PCM WAV',async()=>{const blob=demoWave();const v=new DataView(await blob.arrayBuffer());assert.equal(blob.type,'audio/wav');assert.equal(v.getUint32(24,true),24000);assert.equal(v.getUint32(40,true),12*24000*2);assert.equal(blob.size,576044)});
+
+test('four original demo arrangements have distinct PCM and valid headers',async()=>{const waves=await Promise.all(tracks.map(t=>demoWave(t.id).arrayBuffer()));assert.equal(waves.length,4);for(const wave of waves){const view=new DataView(wave);assert.equal(view.getUint32(24,true),24000);assert.equal(wave.byteLength,576044);}for(let i=0;i<waves.length;i++)for(let j=i+1;j<waves.length;j++)assert.notDeepEqual(Buffer.from(waves[i]),Buffer.from(waves[j]));});
+test('unknown demo track is rejected',()=>{assert.throws(()=>demoWave('missing'))});
