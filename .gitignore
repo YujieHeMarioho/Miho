@@ -5,3 +5,7 @@ dist/
 Vendor/
 
 __pycache__/
+
+# Browser dependencies and generated build output
+web/node_modules/
+web/dist/
