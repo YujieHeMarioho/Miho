@@ -28,6 +28,16 @@ v0.10.0 提供**歌手模式／音乐模式**，声音驱动多轴律动，柔�
 
 两种模式使用同一角色外观，切换只改变声音驱动方式。GIF 使用本项目的**大小声短音节、变化音量的长音与独立鼓声**，经过同一特征分析、姿态引擎、贴边音波和 3D 场景绘制；音乐模式还经过实际 BeatNet。该离线演示直接提供各声部，绕过人声分离模型；它不代表真实歌曲的分离质量或跟随准确率，也没有现场播放器音轨。
 
+## 实机演示视频
+
+[![Miho 实机演示：网页体验与 macOS 桌面伙伴，点击观看](docs/demo/miho-demo-cover.png)](https://github.com/YujieHeMarioho/Miho/blob/main/docs/demo/miho-demo-20261009.mp4)
+
+**[点击观看 2 分 48 秒字幕演示](https://github.com/YujieHeMarioho/Miho/blob/main/docs/demo/miho-demo-20261009.mp4)** · [直接打开 / 下载 MP4](https://raw.githubusercontent.com/YujieHeMarioho/Miho/main/docs/demo/miho-demo-20261009.mp4)
+
+2026 年 10 月 9 日在 Mac mini 录制，展示公网网页的播放、角色与模式切换，以及原生桌面版的外观自定义、移动和音乐响应。字幕为对应画面的功能说明；保留原录屏音轨。点击封面进入视频文件页面观看，README 中不依赖内嵌播放器。
+
+网页使用音量和频谱分析，不进行 AI 推理或人声分离。本片录制的是当时的公网版本，没有播放进度条；本地尚未发布的改动不包含在这次演示发布中。
+
 ## 浏览器体验
 
 无需安装应用，可直接打开 [Miho 在线体验](https://yujiehemarioho.github.io/Miho/)。点击播放测试曲，或选择自己的本地音频文件，再拖动角色查看不同角度。桌面版的使用方法见下方。
